@@ -1,0 +1,8 @@
+gradio
+numpy
+pandas
+librosa
+soundfile
+scipy
+praat-parselmouth
+scikit-learn
