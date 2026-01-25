@@ -1,0 +1,37 @@
+{
+  "feature_names": [
+    "DFA",
+    "HNR",
+    "Jitter(%)",
+    "Jitter:DDP",
+    "Jitter:PPQ5",
+    "Jitter:RAP",
+    "NHR",
+    "PPE",
+    "RPDE",
+    "Shimmer",
+    "Shimmer(dB)",
+    "Shimmer:APQ11",
+    "Shimmer:APQ3",
+    "Shimmer:APQ5",
+    "Shimmer:DDA"
+  ],
+  "n_features": 15,
+  "feature_order": {
+    "0": "DFA",
+    "1": "HNR",
+    "2": "Jitter(%)",
+    "3": "Jitter:DDP",
+    "4": "Jitter:PPQ5",
+    "5": "Jitter:RAP",
+    "6": "NHR",
+    "7": "PPE",
+    "8": "RPDE",
+    "9": "Shimmer",
+    "10": "Shimmer(dB)",
+    "11": "Shimmer:APQ11",
+    "12": "Shimmer:APQ3",
+    "13": "Shimmer:APQ5",
+    "14": "Shimmer:DDA"
+  }
+}
