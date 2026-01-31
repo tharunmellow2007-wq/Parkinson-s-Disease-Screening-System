@@ -1,84 +1,211 @@
-**NeuroVox: Speech-Based Parkinson’s Disease Screening System**
+# 🏥 Parkinson's Disease Detection System
 
-**📌 Overview**
+A professional-grade AI-powered voice analysis platform for detecting Parkinson's Disease and classifying disease progression stages using advanced machine learning and signal processing techniques.
 
-NeuroVox is an AI-based, non-contact screening system designed to support the early detection of Parkinson’s Disease (PD) using speech analysis. Since vocal impairments are among the earliest manifestations of PD, this project leverages acoustic biomarkers to enable accessible, low-cost, and scalable screening before severe disease progression.
+## 🌟 Features
 
-**🎯 Problem Statement**
+- **Disease Detection**: Analyzes 15 voice biomarkers to detect Parkinson's Disease
+- **Stage Classification**: Classifies disease progression into 4 stages (Early, Mild, Moderate, Severe)
+- **Professional Interface**: Modern, medical-grade UI built with Gradio
+- **Advanced Audio Processing**: Includes noise reduction, bandpass filtering, and voice activity detection
+- **Comprehensive Analysis**: Provides detailed clinical descriptions, symptoms, and recommendations
+- **Visual References**: Displays clinical images for each stage
 
-Parkinson’s Disease is commonly diagnosed only in mid or late stages, when irreversible neurological damage has already occurred. Current diagnostic methods rely on subjective clinical assessment and expensive neuroimaging scans, limiting early intervention—especially in rural and underserved regions.
+## 📋 System Overview
 
-**💡 Proposed Solution**
+This system utilizes:
+- **15 Voice Biomarkers**:
+  - Jitter Features (4): Frequency variation measures
+  - Shimmer Features (6): Amplitude variation measures
+  - Harmonicity Features (2): Voice quality indicators (NHR, HNR)
+  - Nonlinear Features (3): Complexity measures (RPDE, DFA, PPE)
+  
+- **Weighted Voting Mechanism**: For accurate stage classification
+- **Advanced Signal Processing**: For high-quality feature extraction
 
-NeuroVox analyzes subtle changes in speech using acoustic feature extraction and machine learning models to identify Parkinson’s-related patterns at an early stage. The system functions as a screening and decision-support tool, not a replacement for medical diagnosis, and aims to assist clinicians with timely insights.
+## 🚀 Quick Start
 
-**🧠 Technical Approach**
+### Prerequisites
 
-Voice data acquisition using standard microphones
+- Python 3.8+
+- pip package manager
 
-Noise reduction and speech preprocessing
+### Installation
 
-Extraction of clinically relevant acoustic features
+1. **Clone or download the repository**
 
-Dual-stage AI architecture:
+2. **Install dependencies**:
+```bash
+pip install -r requirements.txt
+```
 
-PD vs Healthy classification
+3. **Prepare model files** (if available):
+   - Place your trained model files in the `./models` directory:
+     - `parkinsons_ensemble_model.pkl`
+     - `feature_scaler.pkl`
+     - `feature_info.json`
 
-Disease stage estimation
+4. **Prepare stage images** (optional):
+   - Place stage reference images in the `./images` directory:
+     - Format: `stage1a.png`, `stage1b.png`, `stage2a.jpg`, etc.
 
-Instant result generation via a digital interface or API
+### Running the Application
 
-**🎙️ Acoustic Features Used**
+```bash
+python parkinsons_detection_app.py
+```
 
-Fundamental frequency (F0)
+The application will launch at `http://localhost:7860`
 
-Jitter & Shimmer
+## 🐳 Docker Deployment
 
-Harmonics-to-Noise Ratio (HNR)
+Create a `Dockerfile`:
 
-Noise-to-Harmonics Ratio (NHR)
+```dockerfile
+FROM python:3.10-slim
 
-MFCCs
+WORKDIR /app
 
-RPDE, DFA, PPE
+# Install system dependencies
+RUN apt-get update && apt-get install -y \
+    libsndfile1 \
+    ffmpeg \
+    && rm -rf /var/lib/apt/lists/*
 
-RAP, PPQ
+# Copy files
+COPY requirements.txt .
+RUN pip install --no-cache-dir -r requirements.txt
 
-These features capture vocal instability and motor speech impairments associated with Parkinson’s Disease.
+COPY parkinsons_detection_app.py .
+COPY models/ ./models/
+COPY images/ ./images/
 
-**🚀 Key Features**
+EXPOSE 7860
 
-Non-invasive and contactless screening
+CMD ["python", "parkinsons_detection_app.py"]
+```
 
-Speech-based early risk assessment
+Build and run:
+```bash
+docker build -t parkinsons-detection .
+docker run -p 7860:7860 parkinsons-detection
+```
 
-Low-cost and hardware-independent
+## ☁️ Render Deployment
 
-AI/ML-based classification models
+1. **Create a `render.yaml` file**:
 
-API-ready architecture for deployment
+```yaml
+services:
+  - type: web
+    name: parkinsons-detection
+    env: python
+    buildCommand: pip install -r requirements.txt
+    startCommand: python parkinsons_detection_app.py
+    envVars:
+      - key: PYTHON_VERSION
+        value: 3.10.0
+      - key: MODEL_DIR
+        value: ./models
+      - key: OUTPUT_DIR
+        value: ./results
+      - key: IMAGES_DIR
+        value: ./images
+```
 
-Designed for research and clinical support
+2. **Push to GitHub** and connect to Render
 
-**🧰 Technology Stack**
+3. **Deploy** from Render dashboard
 
-Language: Python
+## 🎯 Usage Guide
 
-Audio Processing: Librosa, Praat, NumPy, SciPy
+### Disease Detection Tab
 
-Machine Learning: SVM, Random Forest, XGBoost, KNN, Neural Networks
+1. **Record or Upload Audio**:
+   - Use the microphone to record your voice (5-10 seconds)
+   - Or upload an audio file (WAV, MP3, FLAC)
 
-Development & Training: Google Colab (Jupyter Notebook)
+2. **Adjust Settings**:
+   - Select noise reduction strength (light/medium/heavy)
 
-Deployment: Falcon / Flask / Streamlit (configurable)
+3. **Analyze**:
+   - Click "🔬 Analyze Audio"
+   - View results and extracted features
 
-Version Control: Git & GitHub
+### Stage Classification Tab
 
-**⚠️ Disclaimer**
+1. **Automatic Analysis**:
+   - After disease detection, stage classification runs automatically
+   - View detailed stage information, symptoms, and recommendations
 
-This project is intended for research and educational purposes only.
-It is not a medical diagnostic tool and should not replace professional clinical evaluation.
+2. **Visual References**:
+   - Clinical images are displayed for the diagnosed stage
 
-**📜 License**
+## 🔧 Configuration
 
-This project is licensed under the MIT License.
+Environment variables for deployment:
+
+```bash
+MODEL_DIR=./models          # Directory containing model files
+OUTPUT_DIR=./results        # Directory for output files
+IMAGES_DIR=./images         # Directory containing stage images
+```
+
+## 📊 Model Training
+
+If you need to train your own model:
+
+1. Prepare dataset with voice recordings
+2. Extract features using the provided functions
+3. Train a classification model (e.g., ensemble methods)
+4. Save model, scaler, and feature info as pickle/json files
+
+## 🔐 Security Notes
+
+- This is a diagnostic support tool, not a replacement for professional medical diagnosis
+- Audio recordings are processed locally and not stored permanently
+- Always consult healthcare professionals for medical decisions
+
+## 🤝 Contributing
+
+Contributions are welcome! Please:
+1. Fork the repository
+2. Create a feature branch
+3. Make your changes
+4. Submit a pull request
+
+## 📝 License
+
+This project is for educational and research purposes. Consult with legal counsel before using in clinical settings.
+
+## ⚠️ Disclaimer
+
+**IMPORTANT**: This system is designed as a research and educational tool. It should NOT be used as the sole basis for medical diagnosis or treatment decisions. Always consult qualified healthcare professionals for proper medical evaluation and care.
+
+## 🆘 Support
+
+For issues or questions:
+- Check the documentation
+- Review error messages in the interface
+- Ensure audio quality meets minimum requirements
+- Verify model files are properly loaded
+
+## 📚 References
+
+- Jitter and Shimmer analysis using Praat-Parselmouth
+- Feature extraction based on established Parkinson's research
+- Weighted voting classification methodology
+
+## 🎨 Interface Features
+
+- **Modern Design**: Professional medical-grade interface
+- **Responsive Layout**: Works on desktop and mobile
+- **Color-Coded Results**: Easy-to-understand visual feedback
+- **Detailed Information**: Comprehensive clinical descriptions
+- **Interactive Elements**: Collapsible sections for detailed data
+
+---
+
+**Version**: 1.0  
+**Last Updated**: 2025  
+**Built with**: Gradio, Librosa, Praat-Parselmouth, scikit-learn
