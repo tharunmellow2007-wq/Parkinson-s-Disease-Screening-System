@@ -1,0 +1,16 @@
+services:
+  - type: web
+    name: parkinsons-detection
+    env: python
+    buildCommand: pip install -r requirements.txt
+    startCommand: python parkinsons_detection_app.py
+    healthCheckPath: /
+    envVars:
+      - key: PYTHON_VERSION
+        value: 3.10.0
+      - key: MODEL_DIR
+        value: ./models
+      - key: OUTPUT_DIR
+        value: ./results
+      - key: IMAGES_DIR
+        value: ./images
