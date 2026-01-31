@@ -1,88 +1,108 @@
-# 🏥 Parkinson's Disease Detection System
+# Parkinson's Disease Detection System - Gradio App
 
-A professional-grade AI-powered voice analysis platform for detecting Parkinson's Disease and classifying disease progression stages using advanced machine learning and signal processing techniques.
+## Overview
+A professional medical-grade web application for Parkinson's Disease detection using voice analysis with 15 voice biomarkers and AI-powered stage classification.
 
-## 🌟 Features
-
+## Features
 - **Disease Detection**: Analyzes 15 voice biomarkers to detect Parkinson's Disease
 - **Stage Classification**: Classifies disease progression into 4 stages (Early, Mild, Moderate, Severe)
-- **Professional Interface**: Modern, medical-grade UI built with Gradio
-- **Advanced Audio Processing**: Includes noise reduction, bandpass filtering, and voice activity detection
-- **Comprehensive Analysis**: Provides detailed clinical descriptions, symptoms, and recommendations
-- **Visual References**: Displays clinical images for each stage
+- **Audio Processing**: Advanced noise reduction and signal processing
+- **Professional UI**: Modern, medical-grade interface with comprehensive visualizations
+- **Dual Input**: Support for both recording and file upload
+- **Clinical Insights**: Detailed symptoms, characteristics, and medical recommendations
 
-## 📋 System Overview
+## Installation
 
-This system utilizes:
-- **15 Voice Biomarkers**:
-  - Jitter Features (4): Frequency variation measures
-  - Shimmer Features (6): Amplitude variation measures
-  - Harmonicity Features (2): Voice quality indicators (NHR, HNR)
-  - Nonlinear Features (3): Complexity measures (RPDE, DFA, PPE)
-  
-- **Weighted Voting Mechanism**: For accurate stage classification
-- **Advanced Signal Processing**: For high-quality feature extraction
-
-## 🚀 Quick Start
-
-### Prerequisites
-
-- Python 3.8+
-- pip package manager
-
-### Installation
-
-1. **Clone or download the repository**
-
-2. **Install dependencies**:
+### 1. Install Dependencies
 ```bash
 pip install -r requirements.txt
 ```
 
-3. **Prepare model files** (if available):
-   - Place your trained model files in the `./models` directory:
-     - `parkinsons_ensemble_model.pkl`
-     - `feature_scaler.pkl`
-     - `feature_info.json`
+### 2. Set Up Model Files
+Create the following directory structure:
+```
+./models/
+  ├── parkinsons_ensemble_model.pkl
+  ├── feature_scaler.pkl
+  └── feature_info.json
 
-4. **Prepare stage images** (optional):
-   - Place stage reference images in the `./images` directory:
-     - Format: `stage1a.png`, `stage1b.png`, `stage2a.jpg`, etc.
+./images/
+  ├── stage1a.png
+  ├── stage1b.png
+  ├── stage2a.png
+  ├── stage2b.png
+  ├── stage3a.png
+  ├── stage3b.png
+  ├── stage4a.png
+  └── stage4b.png
 
-### Running the Application
-
-```bash
-python parkinsons_detection_app.py
+./outputs/  # Created automatically
 ```
 
-The application will launch at `http://localhost:7860`
+### 3. Configure Paths (Optional)
+Set environment variables for custom paths:
+```bash
+export MODEL_DIR=/path/to/models
+export OUTPUT_DIR=/path/to/outputs
+export IMAGES_DIR=/path/to/images
+```
 
-## 🐳 Docker Deployment
+## Running the Application
+
+### Local Development
+```bash
+python parkinsons_gradio_app.py
+```
+
+The app will be available at: `http://localhost:7860`
+
+### Production Deployment (Render)
+
+#### Option 1: Using Render Web Service
+
+1. **Create a `render.yaml` file:**
+```yaml
+services:
+  - type: web
+    name: parkinsons-detection
+    env: python
+    buildCommand: pip install -r requirements.txt
+    startCommand: python parkinsons_gradio_app.py
+    envVars:
+      - key: PYTHON_VERSION
+        value: 3.11.0
+      - key: MODEL_DIR
+        value: ./models
+      - key: OUTPUT_DIR
+        value: ./outputs
+      - key: IMAGES_DIR
+        value: ./images
+```
+
+2. **Push to GitHub**
+3. **Connect to Render**
+4. **Deploy**
+
+#### Option 2: Docker Deployment
 
 Create a `Dockerfile`:
-
 ```dockerfile
-FROM python:3.10-slim
+FROM python:3.11-slim
 
 WORKDIR /app
 
-# Install system dependencies
 RUN apt-get update && apt-get install -y \
     libsndfile1 \
-    ffmpeg \
     && rm -rf /var/lib/apt/lists/*
 
-# Copy files
 COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 
-COPY parkinsons_detection_app.py .
-COPY models/ ./models/
-COPY images/ ./images/
+COPY . .
 
 EXPOSE 7860
 
-CMD ["python", "parkinsons_detection_app.py"]
+CMD ["python", "parkinsons_gradio_app.py"]
 ```
 
 Build and run:
@@ -91,121 +111,109 @@ docker build -t parkinsons-detection .
 docker run -p 7860:7860 parkinsons-detection
 ```
 
-## ☁️ Render Deployment
-
-1. **Create a `render.yaml` file**:
-
-```yaml
-services:
-  - type: web
-    name: parkinsons-detection
-    env: python
-    buildCommand: pip install -r requirements.txt
-    startCommand: python parkinsons_detection_app.py
-    envVars:
-      - key: PYTHON_VERSION
-        value: 3.10.0
-      - key: MODEL_DIR
-        value: ./models
-      - key: OUTPUT_DIR
-        value: ./results
-      - key: IMAGES_DIR
-        value: ./images
-```
-
-2. **Push to GitHub** and connect to Render
-
-3. **Deploy** from Render dashboard
-
-## 🎯 Usage Guide
+## Usage Guide
 
 ### Disease Detection Tab
-
-1. **Record or Upload Audio**:
-   - Use the microphone to record your voice (5-10 seconds)
-   - Or upload an audio file (WAV, MP3, FLAC)
-
-2. **Adjust Settings**:
-   - Select noise reduction strength (light/medium/heavy)
-
-3. **Analyze**:
-   - Click "🔬 Analyze Audio"
-   - View results and extracted features
+1. **Record Audio**: Click "Record" tab and record 5-10 seconds of sustained vowel sound
+   - OR **Upload Audio**: Click "Upload" tab and upload a WAV/MP3/FLAC file
+2. **Select Noise Reduction**: Choose light/medium/heavy based on recording quality
+3. **Click "Analyze Audio"**: System will process and display results
+4. **Review Results**: See detection outcome and extracted features
 
 ### Stage Classification Tab
+1. **Automatic Analysis**: After disease detection, results populate automatically
+2. **View Stage Information**: 
+   - Stage number and severity level
+   - Clinical description
+   - Symptoms and characteristics
+   - Medical recommendations
+   - Weighted voting analysis
+3. **Review Visual References**: Clinical images for the diagnosed stage
+4. **Examine Feature Contributions**: See how each feature voted for the stage
 
-1. **Automatic Analysis**:
-   - After disease detection, stage classification runs automatically
-   - View detailed stage information, symptoms, and recommendations
+## Technical Details
 
-2. **Visual References**:
-   - Clinical images are displayed for the diagnosed stage
+### Voice Biomarkers (15 Features)
+1. **Jitter (4)**: Frequency variation measures
+   - Jitter(%), Jitter:RAP, Jitter:PPQ5, Jitter:DDP
+2. **Shimmer (6)**: Amplitude variation measures
+   - Shimmer, Shimmer(dB), Shimmer:APQ3, APQ5, APQ11, DDA
+3. **Harmonicity (2)**: Voice quality indicators
+   - NHR, HNR
+4. **Nonlinear (3)**: Complexity measures
+   - RPDE, DFA, PPE
 
-## 🔧 Configuration
+### Processing Pipeline
+1. **DC Offset Removal**: Eliminates bias
+2. **Noise Reduction**: Spectral subtraction
+3. **Bandpass Filtering**: 80-4000 Hz
+4. **RMS Normalization**: Consistent amplitude
+5. **Voice Activity Detection**: Removes silence
+6. **Feature Extraction**: 15 biomarkers
 
-Environment variables for deployment:
+### Stage Classification
+- **Weighted Voting System**: Features have different weights (1-5)
+- **Four Stages**: Early (1), Mild (2), Moderate (3), Severe (4)
+- **Confidence Score**: Percentage based on voting weights
 
-```bash
-MODEL_DIR=./models          # Directory containing model files
-OUTPUT_DIR=./results        # Directory for output files
-IMAGES_DIR=./images         # Directory containing stage images
-```
+## Troubleshooting
 
-## 📊 Model Training
+### Audio Recording Issues
+- **Microphone not detected**: Check browser permissions
+- **No sound recorded**: Verify microphone is working in system settings
+- **Poor quality**: Use quiet environment, speak clearly
 
-If you need to train your own model:
+### Analysis Errors
+- **"Analysis Error"**: Ensure audio is at least 3 seconds long
+- **Feature extraction fails**: Check audio file format and quality
+- **Stage classification error**: Complete disease detection first
 
-1. Prepare dataset with voice recordings
-2. Extract features using the provided functions
-3. Train a classification model (e.g., ensemble methods)
-4. Save model, scaler, and feature info as pickle/json files
+### Model Loading
+- **Model not found**: Verify `MODEL_DIR` path is correct
+- **Demo mode activated**: Place model files in correct directory
 
-## 🔐 Security Notes
+## API Reference
 
-- This is a diagnostic support tool, not a replacement for professional medical diagnosis
-- Audio recordings are processed locally and not stored permanently
-- Always consult healthcare professionals for medical decisions
+### Main Functions
 
-## 🤝 Contributing
+#### `detect_disease(audio_input, noise_reduction)`
+Analyzes audio for Parkinson's Disease detection.
+- **Parameters**:
+  - `audio_input`: Audio file path or numpy array
+  - `noise_reduction`: "light" | "medium" | "heavy"
+- **Returns**: HTML result, DataFrame of features
 
-Contributions are welcome! Please:
-1. Fork the repository
-2. Create a feature branch
-3. Make your changes
-4. Submit a pull request
+#### `classify_stage(audio_input)`
+Classifies disease progression stage.
+- **Parameters**:
+  - `audio_input`: Audio file path or numpy array
+- **Returns**: HTML result, DataFrame, images
 
-## 📝 License
+## Performance Optimization
 
-This project is for educational and research purposes. Consult with legal counsel before using in clinical settings.
+### For Production
+1. **Use GPU**: Install CUDA-enabled libraries for faster processing
+2. **Cache Models**: Keep models in memory
+3. **Batch Processing**: Process multiple files sequentially
+4. **Optimize Audio**: Downsample to 16kHz for consistency
 
-## ⚠️ Disclaimer
+## Security Considerations
 
-**IMPORTANT**: This system is designed as a research and educational tool. It should NOT be used as the sole basis for medical diagnosis or treatment decisions. Always consult qualified healthcare professionals for proper medical evaluation and care.
+1. **Patient Data**: Ensure HIPAA compliance for medical data
+2. **File Upload**: Validate file types and sizes
+3. **Authentication**: Add user authentication for production
+4. **Data Storage**: Encrypt stored audio files
+5. **Logging**: Implement audit logging for medical use
 
-## 🆘 Support
+## License
+Ensure compliance with medical device regulations in your jurisdiction.
 
-For issues or questions:
-- Check the documentation
-- Review error messages in the interface
-- Ensure audio quality meets minimum requirements
-- Verify model files are properly loaded
+## Support
+For issues or questions, consult the documentation or contact support.
 
-## 📚 References
-
-- Jitter and Shimmer analysis using Praat-Parselmouth
-- Feature extraction based on established Parkinson's research
-- Weighted voting classification methodology
-
-## 🎨 Interface Features
-
-- **Modern Design**: Professional medical-grade interface
-- **Responsive Layout**: Works on desktop and mobile
-- **Color-Coded Results**: Easy-to-understand visual feedback
-- **Detailed Information**: Comprehensive clinical descriptions
-- **Interactive Elements**: Collapsible sections for detailed data
-
----
-
-**Version**: 1.0  
-**Last Updated**: 2025  
-**Built with**: Gradio, Librosa, Praat-Parselmouth, scikit-learn
+## Version History
+- **v1.0.0**: Initial Gradio conversion with full feature parity
+  - Two-tab interface (Disease Detection + Stage Classification)
+  - 15 biomarker analysis
+  - Weighted voting stage classification
+  - Professional medical UI
