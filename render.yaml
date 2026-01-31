@@ -1,16 +1,18 @@
 services:
   - type: web
-    name: parkinsons-detection
+    name: parkinsons-detection-app
     env: python
+    region: oregon
+    plan: free
     buildCommand: pip install -r requirements.txt
-    startCommand: python parkinsons_detection_app.py
-    healthCheckPath: /
+    startCommand: python parkinsons_gradio_app.py
     envVars:
       - key: PYTHON_VERSION
-        value: 3.10.0
+        value: 3.11.0
       - key: MODEL_DIR
         value: ./models
       - key: OUTPUT_DIR
-        value: ./results
+        value: ./outputs
       - key: IMAGES_DIR
         value: ./images
+    healthCheckPath: /
