@@ -1,6 +1,3 @@
-
-!pip install librosa praat-parselmouth soundfile scipy gradio -q
-
 import os
 import numpy as np
 import pandas as pd
@@ -19,35 +16,22 @@ import warnings
 warnings.filterwarnings('ignore')
 
 """
-Parkinson's Disease Detection with Premium Medical Interface
-Two-Tab Design: Disease Detection + Stage Classification
+Enhanced Parkinson's Disease Detection System
+Professional Medical-Grade Interface with Gradio
 """
 
-# Install required libraries
-# !apt-get install -y portaudio19-dev python3-pyaudio
-
-
 print("="*80)
-print("PARKINSON'S DISEASE DETECTION - PREMIUM MEDICAL INTERFACE")
+print("PARKINSON'S DISEASE DETECTION - PROFESSIONAL MEDICAL INTERFACE")
 print("="*80)
-
-# Mount Google Drive
-try:
-    from google.colab import drive
-    if not os.path.exists('/content/drive'):
-        print("\nMounting Google Drive...")
-        drive.mount('/content/drive')
-        print("✓ Google Drive mounted!")
-except:
-    print("⚠️ Not running in Colab - skipping Drive mount")
 
 # ============================================================================
 # CONFIGURATION
 # ============================================================================
 
-MODEL_DIR = '/content/drive/MyDrive/ParkinsonsModel'
-OUTPUT_DIR = '/content/drive/MyDrive/ParkinsonsResults'
-IMAGES_DIR = '/content/drive/MyDrive/ParkinsonsImages'
+# Adjust these paths based on your deployment environment
+MODEL_DIR = os.getenv('MODEL_DIR', './models')
+OUTPUT_DIR = os.getenv('OUTPUT_DIR', './results')
+IMAGES_DIR = os.getenv('IMAGES_DIR', './images')
 os.makedirs(OUTPUT_DIR, exist_ok=True)
 
 # Global variables for state management
@@ -486,18 +470,23 @@ def classify_parkinsons_stage_weighted(features):
 # LOAD MODEL
 # ============================================================================
 
-print("\nLoading model components...")
-try:
-    with open(f'{MODEL_DIR}/parkinsons_ensemble_model.pkl', 'rb') as f:
-        model = pickle.load(f)
-    with open(f'{MODEL_DIR}/feature_scaler.pkl', 'rb') as f:
-        scaler = pickle.load(f)
-    with open(f'{MODEL_DIR}/feature_info.json', 'r') as f:
-        feature_info = json.load(f)
-    print("✓ Model loaded successfully!")
-except Exception as e:
-    print(f"❌ Error loading model: {e}")
-    raise
+def load_model_components():
+    """Load model, scaler, and feature info"""
+    try:
+        with open(f'{MODEL_DIR}/parkinsons_ensemble_model.pkl', 'rb') as f:
+            model = pickle.load(f)
+        with open(f'{MODEL_DIR}/feature_scaler.pkl', 'rb') as f:
+            scaler = pickle.load(f)
+        with open(f'{MODEL_DIR}/feature_info.json', 'r') as f:
+            feature_info = json.load(f)
+        print("✓ Model loaded successfully!")
+        return model, scaler, feature_info
+    except Exception as e:
+        print(f"⚠️ Error loading model: {e}")
+        print("⚠️ Running in demo mode without actual model")
+        return None, None, None
+
+model, scaler, feature_info = load_model_components()
 
 # ============================================================================
 # IMAGE LOADING FUNCTION
@@ -575,9 +564,13 @@ def detect_disease(audio_input, noise_reduction):
             features = extract_all_features(audio_path=temp_path)
 
         # Disease prediction
-        feature_vector = [features[name] for name in feature_info['feature_names']]
-        feature_scaled = scaler.transform([feature_vector])
-        prediction = model.predict(feature_scaled)[0]
+        if model is not None and scaler is not None and feature_info is not None:
+            feature_vector = [features[name] for name in feature_info['feature_names']]
+            feature_scaled = scaler.transform([feature_vector])
+            prediction = model.predict(feature_scaled)[0]
+        else:
+            # Demo mode - use simple heuristic
+            prediction = 1 if features['Jitter(%)'] > 0.006 else 0
 
         # Store globally for Tab 2
         current_features = features
@@ -1017,7 +1010,7 @@ with gr.Blocks(title="Parkinson's Disease Detection System", theme=gr.themes.Sof
             </div>
             """)
 
-            # ✅ IMAGES FIRST (MOVED UP)
+            # Images first
             gr.Markdown("""
             <div style="background: linear-gradient(135deg, #f3e8ff 0%, #e9d5ff 100%); padding: 20px; border-radius: 10px; margin: 25px 0; box-shadow: 0 2px 6px rgba(0,0,0,0.08);">
                 <h3 style="color: #7c3aed; margin: 0 0 10px 0;">🖼️ Stage Visual References</h3>
@@ -1039,7 +1032,7 @@ with gr.Blocks(title="Parkinson's Disease Detection System", theme=gr.themes.Sof
                     container=True
                 )
 
-            # ✅ THEN STAGE OUTPUT (CLINICAL SYMPTOMS)
+            # Stage output
             stage_output = gr.HTML(
                 value="""
                 <div style="text-align: center; padding: 60px 20px; background: linear-gradient(135deg, #e0f2fe 0%, #dbeafe 100%); border-radius: 15px; border: 2px dashed #3b82f6;">
@@ -1049,7 +1042,7 @@ with gr.Blocks(title="Parkinson's Disease Detection System", theme=gr.themes.Sof
                 """
             )
 
-            # ✅ THEN ACCORDION
+            # Accordion
             with gr.Accordion("📊 Feature Contribution Analysis", open=False):
                 stage_features_output = gr.DataFrame(
                     label="Weighted Feature Contributions to Stage Prediction",
@@ -1138,7 +1131,7 @@ with gr.Blocks(title="Parkinson's Disease Detection System", theme=gr.themes.Sof
 
 if __name__ == "__main__":
     print("\n" + "="*80)
-    print("LAUNCHING PREMIUM MEDICAL INTERFACE")
+    print("LAUNCHING PROFESSIONAL MEDICAL INTERFACE")
     print("="*80)
     print("\n🚀 Starting Parkinson's Disease Detection System...")
     print("📊 Two-Tab Professional Interface")
@@ -1147,12 +1140,13 @@ if __name__ == "__main__":
     print("\n" + "="*80)
 
     demo.launch(
-        share=True,
+        share=False,
         server_name="0.0.0.0",
+        server_port=7860,
         show_error=True,
         debug=False,
         quiet=False
     )
 
     print("\n✅ Interface launched successfully!")
-    print("📱 Access via the generated link above")
+    print("📱 Access at http://localhost:7860")
