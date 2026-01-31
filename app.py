@@ -16,21 +16,20 @@ import warnings
 warnings.filterwarnings('ignore')
 
 """
-Parkinson's Disease Detection - Professional Gradio Interface
-Enhanced UI/UX with Medical-Grade Design
+Professional Parkinson's Disease Detection System
+Medical-Grade App Interface with Advanced Voice Analysis
 """
 
 print("="*80)
-print("PARKINSON'S DISEASE DETECTION - PROFESSIONAL INTERFACE")
+print("PARKINSON'S DISEASE DETECTION - PROFESSIONAL MEDICAL APP")
 print("="*80)
 
 # ============================================================================
 # CONFIGURATION
 # ============================================================================
 
-# Configure paths (modify these for your deployment)
 MODEL_DIR = os.getenv('MODEL_DIR', './models')
-OUTPUT_DIR = os.getenv('OUTPUT_DIR', './outputs')
+OUTPUT_DIR = os.getenv('OUTPUT_DIR', './results')
 IMAGES_DIR = os.getenv('IMAGES_DIR', './images')
 os.makedirs(OUTPUT_DIR, exist_ok=True)
 
@@ -470,38 +469,23 @@ def classify_parkinsons_stage_weighted(features):
 # LOAD MODEL
 # ============================================================================
 
-print("\nLoading model components...")
-try:
-    model_path = os.path.join(MODEL_DIR, 'parkinsons_ensemble_model.pkl')
-    scaler_path = os.path.join(MODEL_DIR, 'feature_scaler.pkl')
-    info_path = os.path.join(MODEL_DIR, 'feature_info.json')
-    
-    if os.path.exists(model_path):
-        with open(model_path, 'rb') as f:
+def load_model_components():
+    """Load model, scaler, and feature info"""
+    try:
+        with open(f'{MODEL_DIR}/parkinsons_ensemble_model.pkl', 'rb') as f:
             model = pickle.load(f)
-        with open(scaler_path, 'rb') as f:
+        with open(f'{MODEL_DIR}/feature_scaler.pkl', 'rb') as f:
             scaler = pickle.load(f)
-        with open(info_path, 'r') as f:
+        with open(f'{MODEL_DIR}/feature_info.json', 'r') as f:
             feature_info = json.load(f)
         print("✓ Model loaded successfully!")
-    else:
-        print("⚠️ Model files not found - using demo mode")
-        model = None
-        scaler = None
-        feature_info = {'feature_names': [
-            'Jitter(%)', 'Jitter:RAP', 'Jitter:PPQ5', 'Jitter:DDP',
-            'Shimmer', 'Shimmer(dB)', 'Shimmer:APQ3', 'Shimmer:APQ5',
-            'Shimmer:APQ11', 'Shimmer:DDA', 'NHR', 'HNR', 'RPDE', 'DFA', 'PPE'
-        ]}
-except Exception as e:
-    print(f"⚠️ Error loading model: {e}")
-    model = None
-    scaler = None
-    feature_info = {'feature_names': [
-        'Jitter(%)', 'Jitter:RAP', 'Jitter:PPQ5', 'Jitter:DDP',
-        'Shimmer', 'Shimmer(dB)', 'Shimmer:APQ3', 'Shimmer:APQ5',
-        'Shimmer:APQ11', 'Shimmer:DDA', 'NHR', 'HNR', 'RPDE', 'DFA', 'PPE'
-    ]}
+        return model, scaler, feature_info
+    except Exception as e:
+        print(f"⚠️ Error loading model: {e}")
+        print("⚠️ Running in demo mode without actual model")
+        return None, None, None
+
+model, scaler, feature_info = load_model_components()
 
 # ============================================================================
 # IMAGE LOADING FUNCTION
@@ -527,6 +511,7 @@ def load_stage_images(stage):
     elif len(images) == 1:
         return images[0], None
     else:
+        print(f"⚠️ No images found for stage {stage}")
         return None, None
 
 # ============================================================================
@@ -534,16 +519,19 @@ def load_stage_images(stage):
 # ============================================================================
 
 def detect_disease(audio_input, noise_reduction):
-    """Disease detection (Tab 1)"""
-
+    """Disease detection from microphone or upload"""
     global current_features, current_prediction
 
     try:
         if audio_input is None:
             return """
-            <div style="text-align: center; padding: 60px 20px; background: linear-gradient(135deg, #e0f2fe 0%, #dbeafe 100%); border-radius: 15px; border: 2px dashed #3b82f6;">
-                <h2 style="color: #1e40af; margin-bottom: 15px;">🎤 Ready for Analysis</h2>
-                <p style="color: #3b82f6; font-size: 1.1em;">Please record or upload an audio file to begin voice analysis</p>
+            <div style="text-align: center; padding: 80px 30px; background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); border-radius: 20px; box-shadow: 0 10px 30px rgba(0,0,0,0.2);">
+                <div style="background: rgba(255,255,255,0.95); padding: 40px; border-radius: 15px; display: inline-block;">
+                    <h2 style="color: #667eea; margin: 0 0 20px 0; font-size: 2em;">🎤 Ready for Voice Analysis</h2>
+                    <p style="color: #666; font-size: 1.2em; margin: 0; line-height: 1.6;">
+                        Please record your voice using the microphone<br>or upload an audio file to begin
+                    </p>
+                </div>
             </div>
             """, None
 
@@ -555,6 +543,7 @@ def detect_disease(audio_input, noise_reduction):
             timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
             temp_path = f'/tmp/recorded_{timestamp}.wav'
             sf.write(temp_path, audio_array, sr)
+            audio_source = "Microphone Recording"
 
             processed_audio, sample_rate, quality_metrics = preprocess_parkinsons_audio(
                 audio_path=temp_path,
@@ -566,97 +555,129 @@ def detect_disease(audio_input, noise_reduction):
 
         else:
             temp_path = audio_input
+            audio_source = "Uploaded File"
+
+            audio_array, sample_rate = librosa.load(temp_path, sr=None, mono=True)
+            quality_metrics = {
+                'duration': len(audio_array) / sample_rate,
+                'sample_rate': sample_rate
+            }
+
             features = extract_all_features(audio_path=temp_path)
 
         # Disease prediction
-        if model is not None and scaler is not None:
+        if model is not None and scaler is not None and feature_info is not None:
             feature_vector = [features[name] for name in feature_info['feature_names']]
             feature_scaled = scaler.transform([feature_vector])
             prediction = model.predict(feature_scaled)[0]
         else:
-            # Demo mode - random prediction
-            prediction = np.random.choice([0, 1])
+            # Demo mode - use simple heuristic
+            prediction = 1 if features['Jitter(%)'] > 0.006 else 0
 
         # Store globally for Tab 2
         current_features = features
         current_prediction = prediction
 
-        # Build result
+        # Build result with app-like design
         if prediction == 1:
+            # Parkinson's Detected
             result_html = f"""
-            <div style="background: linear-gradient(135deg, #fee2e2 0%, #fecaca 100%); padding: 25px; border-radius: 15px; border-left: 6px solid #ef4444; margin-bottom: 20px; box-shadow: 0 4px 6px rgba(0,0,0,0.1);">
-                <h2 style="color: #991b1b; margin: 0 0 10px 0;">⚠️ Parkinson's Disease Detected</h2>
-                <p style="color: #7f1d1d; font-size: 1.1em; margin: 0;">Voice biomarkers indicate presence of Parkinson's Disease</p>
+            <div style="background: linear-gradient(135deg, #fee2e2 0%, #fecaca 100%); padding: 35px; border-radius: 20px; margin-bottom: 25px; box-shadow: 0 8px 20px rgba(239,68,68,0.2);">
+                <div style="display: flex; align-items: center; margin-bottom: 15px;">
+                    <div style="background: #ef4444; width: 60px; height: 60px; border-radius: 50%; display: flex; align-items: center; justify-content: center; margin-right: 20px;">
+                        <span style="font-size: 32px;">⚠️</span>
+                    </div>
+                    <div>
+                        <h2 style="color: #991b1b; margin: 0; font-size: 1.8em;">Parkinson's Disease Detected</h2>
+                        <p style="color: #7f1d1d; margin: 5px 0 0 0; font-size: 1.1em;">Voice biomarkers indicate presence of PD</p>
+                    </div>
+                </div>
             </div>
 
-            <div style="background: linear-gradient(135deg, #fef3c7 0%, #fde68a 100%); padding: 25px; border-radius: 12px; box-shadow: 0 2px 8px rgba(0,0,0,0.1); margin-bottom: 20px;">
-                <h3 style="color: #92400e; margin-top: 0;">🔬 Feature Analysis Summary</h3>
-                <p style="color: #78350f; line-height: 1.8; margin: 0;">
-                    Analysis completed on <strong>15 voice biomarkers</strong> including:
-                    <br>• <strong>Jitter Features (4):</strong> Frequency variation measures
-                    <br>• <strong>Shimmer Features (6):</strong> Amplitude variation measures
-                    <br>• <strong>Harmonicity Features (2):</strong> Voice quality indicators (NHR, HNR)
-                    <br>• <strong>Nonlinear Features (3):</strong> Complexity measures (RPDE, DFA, PPE)
-                </p>
+            <div style="background: white; padding: 30px; border-radius: 15px; box-shadow: 0 4px 15px rgba(0,0,0,0.1); margin-bottom: 20px;">
+                <h3 style="color: #667eea; margin: 0 0 20px 0; font-size: 1.5em; border-bottom: 3px solid #667eea; padding-bottom: 10px;">📊 Analysis Summary</h3>
+                <div style="background: #f8fafc; padding: 20px; border-radius: 10px; border-left: 4px solid #f59e0b;">
+                    <p style="color: #334155; line-height: 1.9; margin: 0; font-size: 1.05em;">
+                        <strong style="color: #667eea;">✓ Completed Analysis on 15 Voice Biomarkers</strong>
+                        <br><br>
+                        <strong>📈 Jitter Features (4):</strong> Frequency variation measures
+                        <br><strong>📉 Shimmer Features (6):</strong> Amplitude variation measures
+                        <br><strong>🎵 Harmonicity Features (2):</strong> Voice quality indicators (NHR, HNR)
+                        <br><strong>🔬 Nonlinear Features (3):</strong> Complexity measures (RPDE, DFA, PPE)
+                    </p>
+                </div>
             </div>
 
-            <div style="background: linear-gradient(135deg, #fee2e2 0%, #fecaca 100%); padding: 25px; border-radius: 12px; box-shadow: 0 2px 8px rgba(0,0,0,0.1); margin-bottom: 20px;">
-                <h3 style="color: #991b1b; margin-top: 0;">📋 General Instructions for Parkinson's Disease</h3>
-                <p style="color: #7f1d1d; font-size: 1.02em; line-height: 1.8; margin: 0;">
-                    • <strong>Consult a neurologist or movement disorder specialist</strong> for comprehensive evaluation
-                    <br>• Continue with detailed disease progression analysis in the Stage Classification tab
-                    <br>• Maintain a symptom diary to track changes over time
-                    <br>• Consider early intervention strategies including medication and therapy
-                    <br>• Join support groups and connect with healthcare professionals
-                    <br>• Regular follow-up assessments are essential for monitoring disease progression
-                </p>
+            <div style="background: linear-gradient(135deg, #fef3c7 0%, #fde68a 100%); padding: 30px; border-radius: 15px; box-shadow: 0 4px 15px rgba(245,158,11,0.2); margin-bottom: 20px;">
+                <h3 style="color: #92400e; margin: 0 0 20px 0; font-size: 1.5em;">📋 Medical Recommendations</h3>
+                <div style="background: white; padding: 20px; border-radius: 10px;">
+                    <ul style="color: #78350f; font-size: 1.05em; line-height: 2; margin: 0; padding-left: 25px;">
+                        <li><strong>Consult a neurologist</strong> or movement disorder specialist immediately</li>
+                        <li>Proceed to <strong>Stage Classification</strong> tab for detailed progression analysis</li>
+                        <li>Maintain a daily symptom diary to track changes</li>
+                        <li>Consider early intervention strategies and therapy options</li>
+                        <li>Join support groups and connect with healthcare professionals</li>
+                    </ul>
+                </div>
             </div>
 
-            <div style="background: linear-gradient(135deg, #fef3c7 0%, #fde68a 100%); padding: 25px; border-radius: 12px; box-shadow: 0 2px 8px rgba(0,0,0,0.1);">
-                <h3 style="color: #92400e; margin-top: 0;">🔬 Next Steps</h3>
-                <p style="color: #78350f; font-size: 1.05em; line-height: 1.8; margin: 0;">
-                    Parkinson's Disease has been detected in the voice sample.
-                    <br><br>
-                    <strong>Please proceed to the <span style="color: #f59e0b;">Stage Classification</span> tab for detailed progression analysis and clinical recommendations.</strong>
+            <div style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); padding: 30px; border-radius: 15px; box-shadow: 0 8px 25px rgba(102,126,234,0.3); text-align: center;">
+                <h3 style="color: white; margin: 0 0 15px 0; font-size: 1.6em;">🔬 Next Steps</h3>
+                <p style="color: #e0e7ff; font-size: 1.15em; line-height: 1.8; margin: 0;">
+                    Please navigate to the <strong>Stage Classification</strong> tab<br>
+                    for comprehensive disease progression analysis<br>
+                    and personalized clinical recommendations
                 </p>
             </div>
             """
         else:
+            # Healthy
             result_html = f"""
-            <div style="background: linear-gradient(135deg, #d1fae5 0%, #a7f3d0 100%); padding: 25px; border-radius: 15px; border-left: 6px solid #10b981; margin-bottom: 20px; box-shadow: 0 4px 6px rgba(0,0,0,0.1);">
-                <h2 style="color: #065f46; margin: 0 0 10px 0;">✅ Healthy Voice Profile</h2>
-                <p style="color: #047857; font-size: 1.1em; margin: 0;">No significant indicators of Parkinson's Disease detected</p>
+            <div style="background: linear-gradient(135deg, #d1fae5 0%, #a7f3d0 100%); padding: 35px; border-radius: 20px; margin-bottom: 25px; box-shadow: 0 8px 20px rgba(16,185,129,0.2);">
+                <div style="display: flex; align-items: center; margin-bottom: 15px;">
+                    <div style="background: #10b981; width: 60px; height: 60px; border-radius: 50%; display: flex; align-items: center; justify-content: center; margin-right: 20px;">
+                        <span style="font-size: 32px;">✅</span>
+                    </div>
+                    <div>
+                        <h2 style="color: #065f46; margin: 0; font-size: 1.8em;">Healthy Voice Profile</h2>
+                        <p style="color: #047857; margin: 5px 0 0 0; font-size: 1.1em;">No indicators of Parkinson's Disease detected</p>
+                    </div>
+                </div>
             </div>
 
-            <div style="background: linear-gradient(135deg, #dbeafe 0%, #bfdbfe 100%); padding: 25px; border-radius: 12px; box-shadow: 0 2px 8px rgba(0,0,0,0.1); margin-bottom: 20px;">
-                <h3 style="color: #1e40af; margin-top: 0;">🔬 Feature Analysis Summary</h3>
-                <p style="color: #1e3a8a; line-height: 1.8; margin: 0;">
-                    Analysis completed on <strong>15 voice biomarkers</strong> including:
-                    <br>• <strong>Jitter Features (4):</strong> Frequency variation measures
-                    <br>• <strong>Shimmer Features (6):</strong> Amplitude variation measures
-                    <br>• <strong>Harmonicity Features (2):</strong> Voice quality indicators (NHR, HNR)
-                    <br>• <strong>Nonlinear Features (3):</strong> Complexity measures (RPDE, DFA, PPE)
-                </p>
+            <div style="background: white; padding: 30px; border-radius: 15px; box-shadow: 0 4px 15px rgba(0,0,0,0.1); margin-bottom: 20px;">
+                <h3 style="color: #667eea; margin: 0 0 20px 0; font-size: 1.5em; border-bottom: 3px solid #667eea; padding-bottom: 10px;">📊 Analysis Summary</h3>
+                <div style="background: #f8fafc; padding: 20px; border-radius: 10px; border-left: 4px solid #10b981;">
+                    <p style="color: #334155; line-height: 1.9; margin: 0; font-size: 1.05em;">
+                        <strong style="color: #667eea;">✓ Completed Analysis on 15 Voice Biomarkers</strong>
+                        <br><br>
+                        <strong>📈 Jitter Features (4):</strong> Frequency variation measures
+                        <br><strong>📉 Shimmer Features (6):</strong> Amplitude variation measures
+                        <br><strong>🎵 Harmonicity Features (2):</strong> Voice quality indicators (NHR, HNR)
+                        <br><strong>🔬 Nonlinear Features (3):</strong> Complexity measures (RPDE, DFA, PPE)
+                    </p>
+                </div>
             </div>
 
-            <div style="background: linear-gradient(135deg, #d1fae5 0%, #a7f3d0 100%); padding: 25px; border-radius: 12px; box-shadow: 0 2px 8px rgba(0,0,0,0.1); margin-bottom: 20px;">
-                <h3 style="color: #065f46; margin-top: 0;">📋 General Instructions for Healthy Voice</h3>
-                <p style="color: #047857; font-size: 1.02em; line-height: 1.8; margin: 0;">
-                    • <strong>Continue regular health monitoring</strong> with annual check-ups
-                    <br>• Maintain vocal health through adequate hydration (8-10 glasses of water daily)
-                    <br>• Practice voice rest when experiencing strain or fatigue
-                    <br>• Avoid excessive shouting, prolonged speaking, or vocal abuse
-                    <br>• Consider voice exercises and proper breathing techniques
-                    <br>• Monitor for any changes in voice quality and report to healthcare provider
-                </p>
+            <div style="background: linear-gradient(135deg, #dbeafe 0%, #bfdbfe 100%); padding: 30px; border-radius: 15px; box-shadow: 0 4px 15px rgba(59,130,246,0.2); margin-bottom: 20px;">
+                <h3 style="color: #1e40af; margin: 0 0 20px 0; font-size: 1.5em;">💡 Health Recommendations</h3>
+                <div style="background: white; padding: 20px; border-radius: 10px;">
+                    <ul style="color: #1e3a8a; font-size: 1.05em; line-height: 2; margin: 0; padding-left: 25px;">
+                        <li>Continue <strong>regular health monitoring</strong> with annual check-ups</li>
+                        <li>Maintain vocal health through adequate <strong>hydration</strong> (8-10 glasses daily)</li>
+                        <li>Practice voice rest when experiencing strain or fatigue</li>
+                        <li>Avoid excessive shouting or prolonged loud speaking</li>
+                        <li>Report any changes in voice quality to your healthcare provider</li>
+                    </ul>
+                </div>
             </div>
 
-            <div style="background: linear-gradient(135deg, #dbeafe 0%, #bfdbfe 100%); padding: 25px; border-radius: 12px; box-shadow: 0 2px 8px rgba(0,0,0,0.1);">
-                <h3 style="color: #1e40af; margin-top: 0;">✅ Interpretation</h3>
-                <p style="color: #1e3a8a; font-size: 1.05em; line-height: 1.8; margin: 0;">
-                    Voice biomarkers appear within normal ranges. No significant indicators of Parkinson's Disease were detected in this voice sample.
-                    <br><br>
-                    <strong>Maintain healthy lifestyle practices and continue routine health screenings.</strong>
+            <div style="background: linear-gradient(135deg, #10b981 0%, #059669 100%); padding: 30px; border-radius: 15px; box-shadow: 0 8px 25px rgba(16,185,129,0.3); text-align: center;">
+                <h3 style="color: white; margin: 0 0 15px 0; font-size: 1.6em;">✨ Results Interpretation</h3>
+                <p style="color: #d1fae5; font-size: 1.15em; line-height: 1.8; margin: 0;">
+                    Your voice biomarkers are within normal ranges.<br>
+                    No significant indicators of Parkinson's Disease detected.<br><br>
+                    <strong>Maintain healthy lifestyle practices!</strong>
                 </p>
             </div>
             """
@@ -671,62 +692,81 @@ def detect_disease(audio_input, noise_reduction):
 
     except Exception as e:
         error_msg = f"""
-        <div style="background: linear-gradient(135deg, #fee2e2 0%, #fecaca 100%); padding: 25px; border-radius: 15px; border-left: 6px solid #dc2626; box-shadow: 0 4px 6px rgba(0,0,0,0.1);">
-            <h2 style="color: #991b1b; margin: 0 0 10px 0;">❌ Analysis Error</h2>
-            <p style="color: #7f1d1d; font-size: 1.05em; margin: 0;">
-                <strong>Error Details:</strong> {str(e)}
-                <br><br>
-                <strong>Troubleshooting:</strong>
-                <br>• Ensure audio is clear and at least 3 seconds long
-                <br>• Check microphone functionality for recordings
-                <br>• Verify file format (WAV, MP3, FLAC supported)
-                <br>• Ensure adequate voice activity in the recording
-            </p>
+        <div style="background: linear-gradient(135deg, #fee2e2 0%, #fecaca 100%); padding: 35px; border-radius: 20px; box-shadow: 0 8px 20px rgba(220,38,38,0.2);">
+            <div style="display: flex; align-items: center; margin-bottom: 20px;">
+                <div style="background: #dc2626; width: 60px; height: 60px; border-radius: 50%; display: flex; align-items: center; justify-content: center; margin-right: 20px;">
+                    <span style="font-size: 32px;">❌</span>
+                </div>
+                <div>
+                    <h2 style="color: #991b1b; margin: 0; font-size: 1.8em;">Analysis Error</h2>
+                </div>
+            </div>
+            <div style="background: white; padding: 25px; border-radius: 10px;">
+                <p style="color: #7f1d1d; font-size: 1.1em; line-height: 1.8; margin: 0;">
+                    <strong>Error Details:</strong> {str(e)}
+                    <br><br>
+                    <strong>Troubleshooting Tips:</strong>
+                    <br>• Ensure audio is clear and at least 3-5 seconds long
+                    <br>• Check microphone is working properly
+                    <br>• Verify file format (WAV, MP3, FLAC supported)
+                    <br>• Ensure sufficient voice activity in recording
+                </p>
+            </div>
         </div>
         """
         return error_msg, None
 
 
 def classify_stage(audio_input):
-    """Stage classification (Tab 2)"""
-
+    """Stage classification with images shown first"""
     global current_features, current_prediction
 
     try:
         if audio_input is None:
             return """
-            <div style="text-align: center; padding: 60px 20px; background: linear-gradient(135deg, #e0f2fe 0%, #dbeafe 100%); border-radius: 15px; border: 2px dashed #3b82f6;">
-                <h2 style="color: #1e40af; margin-bottom: 15px;">ℹ️ No Audio Input</h2>
-                <p style="color: #3b82f6; font-size: 1.1em;">Please provide audio in the <strong>Disease Detection</strong> tab first</p>
+            <div style="text-align: center; padding: 80px 30px; background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); border-radius: 20px; box-shadow: 0 10px 30px rgba(0,0,0,0.2);">
+                <div style="background: rgba(255,255,255,0.95); padding: 40px; border-radius: 15px; display: inline-block;">
+                    <h2 style="color: #667eea; margin: 0 0 20px 0; font-size: 2em;">ℹ️ No Audio Input</h2>
+                    <p style="color: #666; font-size: 1.2em; margin: 0; line-height: 1.6;">
+                        Please complete disease detection<br>in the first tab before proceeding
+                    </p>
+                </div>
             </div>
             """, None, None, None
 
         if current_prediction is None:
             return """
-            <div style="text-align: center; padding: 60px 20px; background: linear-gradient(135deg, #fef3c7 0%, #fde68a 100%); border-radius: 15px; border: 2px dashed #f59e0b;">
-                <h2 style="color: #92400e; margin-bottom: 15px;">⚠️ Analysis Required</h2>
-                <p style="color: #78350f; font-size: 1.1em;">Please run disease detection in the first tab before stage classification</p>
+            <div style="text-align: center; padding: 80px 30px; background: linear-gradient(135deg, #f59e0b 0%, #d97706 100%); border-radius: 20px; box-shadow: 0 10px 30px rgba(0,0,0,0.2);">
+                <div style="background: rgba(255,255,255,0.95); padding: 40px; border-radius: 15px; display: inline-block;">
+                    <h2 style="color: #f59e0b; margin: 0 0 20px 0; font-size: 2em;">⚠️ Analysis Required</h2>
+                    <p style="color: #666; font-size: 1.2em; margin: 0; line-height: 1.6;">
+                        Please run disease detection<br>in the Disease Detection tab first
+                    </p>
+                </div>
             </div>
             """, None, None, None
 
         if current_prediction == 0:
             return """
-            <div style="background: linear-gradient(135deg, #d1fae5 0%, #a7f3d0 100%); padding: 40px; border-radius: 15px; box-shadow: 0 4px 6px rgba(0,0,0,0.1);">
-                <h2 style="color: #065f46; margin-top: 0; text-align: center;">✅ No Stage Classification Required</h2>
-                <p style="color: #047857; font-size: 1.1em; text-align: center; line-height: 1.8; margin: 20px 0;">
-                    The audio sample was classified as <strong>HEALTHY</strong>.
-                    <br><br>
-                    Stage classification is only performed when Parkinson's Disease is detected.
-                </p>
-                <div style="background: linear-gradient(135deg, #dbeafe 0%, #bfdbfe 100%); padding: 20px; border-radius: 10px; margin-top: 20px;">
-                    <h3 style="color: #1e40af; margin-top: 0;">💡 Recommendations</h3>
-                    <p style="color: #1e3a8a; line-height: 1.8; margin: 0;">
-                        • Continue regular health monitoring
-                        <br>• Maintain vocal health through adequate hydration
-                        <br>• Practice voice rest when needed
-                        <br>• Avoid vocal strain and excessive loudness
-                        <br>• Schedule regular health check-ups
+            <div style="background: linear-gradient(135deg, #d1fae5 0%, #a7f3d0 100%); padding: 50px; border-radius: 20px; box-shadow: 0 8px 25px rgba(16,185,129,0.2);">
+                <div style="text-align: center; margin-bottom: 30px;">
+                    <div style="background: #10b981; width: 80px; height: 80px; border-radius: 50%; display: inline-flex; align-items: center; justify-content: center; margin-bottom: 20px;">
+                        <span style="font-size: 40px;">✅</span>
+                    </div>
+                    <h2 style="color: #065f46; margin: 0; font-size: 2em;">No Stage Classification Required</h2>
+                    <p style="color: #047857; font-size: 1.2em; margin: 15px 0 0 0;">
+                        The audio sample was classified as <strong>HEALTHY</strong>
                     </p>
+                </div>
+                <div style="background: white; padding: 30px; border-radius: 15px;">
+                    <h3 style="color: #667eea; margin: 0 0 20px 0; font-size: 1.4em;">💡 Health Maintenance Recommendations</h3>
+                    <ul style="color: #334155; line-height: 2; font-size: 1.05em; margin: 0; padding-left: 25px;">
+                        <li>Continue regular health monitoring and annual check-ups</li>
+                        <li>Maintain vocal health through adequate hydration</li>
+                        <li>Practice voice rest when needed</li>
+                        <li>Avoid vocal strain and excessive loudness</li>
+                        <li>Schedule regular health screenings</li>
+                    </ul>
                 </div>
             </div>
             """, None, None, None
@@ -734,79 +774,92 @@ def classify_stage(audio_input):
         # Perform stage classification
         stage_result = classify_parkinsons_stage_weighted(current_features)
 
-        # Load images
+        # Load images FIRST
         stage_img1, stage_img2 = load_stage_images(stage_result['stage'])
 
-        # Build stage output HTML
+        # Build comprehensive stage output
         stage_html = f"""
-        <div style="background: linear-gradient(135deg, {stage_result['bg_color']} 0%, {stage_result['color']}20 100%); padding: 30px; border-radius: 15px; border-left: 6px solid {stage_result['color']}; margin-bottom: 20px; box-shadow: 0 4px 6px rgba(0,0,0,0.1);">
-            <h2 style="color: {stage_result['color']}; margin: 0 0 10px 0;">Stage {stage_result['stage']}: {stage_result['stage_name']}</h2>
-            <p style="color: {stage_result['color']}; font-size: 1.2em; margin: 0;"><strong>Severity: {stage_result['severity']}</strong></p>
+        <div style="background: linear-gradient(135deg, {stage_result['bg_color']} 0%, {stage_result['color']}20 100%); padding: 35px; border-radius: 20px; margin-bottom: 25px; box-shadow: 0 8px 20px rgba(0,0,0,0.15);">
+            <div style="display: flex; align-items: center; margin-bottom: 15px;">
+                <div style="background: {stage_result['color']}; width: 70px; height: 70px; border-radius: 50%; display: flex; align-items: center; justify-content: center; margin-right: 25px; box-shadow: 0 4px 15px rgba(0,0,0,0.2);">
+                    <span style="color: white; font-size: 2em; font-weight: bold;">{stage_result['stage']}</span>
+                </div>
+                <div>
+                    <h2 style="color: {stage_result['color']}; margin: 0; font-size: 2em;">Stage {stage_result['stage']}: {stage_result['stage_name']}</h2>
+                    <p style="color: {stage_result['color']}; margin: 5px 0 0 0; font-size: 1.3em;"><strong>Severity: {stage_result['severity']}</strong></p>
+                </div>
+            </div>
         </div>
 
-        <div style="background: linear-gradient(135deg, #dbeafe 0%, #bfdbfe 100%); padding: 25px; border-radius: 12px; box-shadow: 0 2px 8px rgba(0,0,0,0.1); margin-bottom: 20px;">
-            <h3 style="color: #1e40af; margin-top: 0;">📝 Clinical Description</h3>
-            <p style="color: #1e3a8a; font-size: 1.05em; line-height: 1.8; margin: 0;">{stage_result['description']}</p>
+        <div style="background: white; padding: 30px; border-radius: 15px; box-shadow: 0 4px 15px rgba(0,0,0,0.1); margin-bottom: 20px;">
+            <h3 style="color: #667eea; margin: 0 0 20px 0; font-size: 1.5em; border-bottom: 3px solid #667eea; padding-bottom: 10px;">📝 Clinical Description</h3>
+            <p style="color: #334155; font-size: 1.15em; line-height: 1.9; margin: 0; padding: 20px; background: #f8fafc; border-radius: 10px; border-left: 4px solid {stage_result['color']};">
+                {stage_result['description']}
+            </p>
         </div>
 
-        <div style="background: linear-gradient(135deg, #fee2e2 0%, #fecaca 100%); padding: 25px; border-radius: 12px; box-shadow: 0 2px 8px rgba(0,0,0,0.1); margin-bottom: 20px;">
-            <h3 style="color: #991b1b; margin-top: 0;">🩺 Clinical Symptoms</h3>
-            <ul style="color: #7f1d1d; font-size: 1.02em; line-height: 1.8; margin: 10px 0; padding-left: 20px;">
+        <div style="background: linear-gradient(135deg, #fee2e2 0%, #fecaca 100%); padding: 30px; border-radius: 15px; box-shadow: 0 4px 15px rgba(239,68,68,0.2); margin-bottom: 20px;">
+            <h3 style="color: #991b1b; margin: 0 0 20px 0; font-size: 1.5em;">🩺 Clinical Symptoms</h3>
+            <div style="background: white; padding: 25px; border-radius: 10px;">
+                <ul style="color: #7f1d1d; font-size: 1.05em; line-height: 2; margin: 0; padding-left: 25px;">
         """
 
         for symptom in stage_result['symptoms']:
             stage_html += f"<li>{symptom}</li>\n"
 
         stage_html += """
-            </ul>
+                </ul>
+            </div>
         </div>
 
-        <div style="background: linear-gradient(135deg, #dbeafe 0%, #bfdbfe 100%); padding: 25px; border-radius: 12px; box-shadow: 0 2px 8px rgba(0,0,0,0.1); margin-bottom: 20px;">
-            <h3 style="color: #1e40af; margin-top: 0;">🔍 Voice Characteristics</h3>
-            <ul style="color: #1e3a8a; font-size: 1.02em; line-height: 1.8; margin: 10px 0; padding-left: 20px;">
+        <div style="background: linear-gradient(135deg, #dbeafe 0%, #bfdbfe 100%); padding: 30px; border-radius: 15px; box-shadow: 0 4px 15px rgba(59,130,246,0.2); margin-bottom: 20px;">
+            <h3 style="color: #1e40af; margin: 0 0 20px 0; font-size: 1.5em;">🔍 Voice Characteristics</h3>
+            <div style="background: white; padding: 25px; border-radius: 10px;">
+                <ul style="color: #1e3a8a; font-size: 1.05em; line-height: 2; margin: 0; padding-left: 25px;">
         """
 
         for char in stage_result['characteristics']:
             stage_html += f"<li>{char}</li>\n"
 
         stage_html += """
-            </ul>
+                </ul>
+            </div>
         </div>
 
-        <div style="background: linear-gradient(135deg, #d1fae5 0%, #a7f3d0 100%); padding: 25px; border-radius: 12px; box-shadow: 0 2px 8px rgba(0,0,0,0.1); margin-bottom: 20px;">
-            <h3 style="color: #065f46; margin-top: 0;">💊 Medical Recommendations</h3>
-            <ul style="color: #047857; font-size: 1.02em; line-height: 1.8; margin: 10px 0; padding-left: 20px;">
+        <div style="background: linear-gradient(135deg, #d1fae5 0%, #a7f3d0 100%); padding: 30px; border-radius: 15px; box-shadow: 0 4px 15px rgba(16,185,129,0.2); margin-bottom: 20px;">
+            <h3 style="color: #065f46; margin: 0 0 20px 0; font-size: 1.5em;">💊 Medical Recommendations</h3>
+            <div style="background: white; padding: 25px; border-radius: 10px;">
+                <ul style="color: #047857; font-size: 1.05em; line-height: 2; margin: 0; padding-left: 25px;">
         """
 
         for rec in stage_result['recommendations']:
             stage_html += f"<li>{rec}</li>\n"
 
         stage_html += f"""
-            </ul>
+                </ul>
+            </div>
         </div>
 
-        <div style="background: linear-gradient(135deg, #fef3c7 0%, #fde68a 100%); padding: 25px; border-radius: 12px; box-shadow: 0 2px 8px rgba(0,0,0,0.1);">
-            <h3 style="color: #92400e; margin-top: 0;">📊 Weighted Voting Analysis</h3>
-            <p style="color: #78350f; margin-bottom: 15px;"><strong>Total Weight:</strong> {stage_result['total_weight']}</p>
-            <div style="margin-top: 10px;">
+        <div style="background: linear-gradient(135deg, #fef3c7 0%, #fde68a 100%); padding: 30px; border-radius: 15px; box-shadow: 0 4px 15px rgba(245,158,11,0.2);">
+            <h3 style="color: #92400e; margin: 0 0 20px 0; font-size: 1.5em;">📊 Weighted Voting Analysis</h3>
+            <div style="background: white; padding: 25px; border-radius: 10px;">
+                <p style="color: #78350f; margin-bottom: 20px; font-size: 1.1em;"><strong>Total Weight:</strong> {stage_result['total_weight']}</p>
         """
 
         for stage, votes in sorted(stage_result['weighted_votes'].items()):
             percentage = (votes / stage_result['total_weight']) * 100
-            bar_length = int(percentage * 3)
-            bar = "█" * bar_length
             stage_html += f"""
-            <div style="margin-bottom: 12px;">
-                <div style="display: flex; justify-content: space-between; margin-bottom: 5px;">
-                    <span style="color: #78350f; font-weight: 600;">Stage {stage}</span>
-                    <span style="color: #92400e;">{votes}/{stage_result['total_weight']} ({percentage:.1f}%)</span>
-                </div>
-                <div style="background: #fde68a; border-radius: 10px; height: 25px; position: relative; overflow: hidden;">
-                    <div style="background: linear-gradient(90deg, #f59e0b 0%, #d97706 100%); width: {percentage}%; height: 100%; border-radius: 10px; display: flex; align-items: center; padding-left: 10px;">
-                        <span style="color: white; font-weight: 600; font-size: 0.9em;">{bar}</span>
+                <div style="margin-bottom: 15px;">
+                    <div style="display: flex; justify-content: space-between; margin-bottom: 8px;">
+                        <span style="color: #78350f; font-weight: 600; font-size: 1.05em;">Stage {stage}</span>
+                        <span style="color: #92400e; font-weight: 600;">{votes}/{stage_result['total_weight']} ({percentage:.1f}%)</span>
+                    </div>
+                    <div style="background: #fde68a; border-radius: 12px; height: 30px; position: relative; overflow: hidden; box-shadow: inset 0 2px 4px rgba(0,0,0,0.1);">
+                        <div style="background: linear-gradient(90deg, #f59e0b 0%, #d97706 100%); width: {percentage}%; height: 100%; border-radius: 12px; display: flex; align-items: center; padding-left: 15px; transition: width 0.3s ease;">
+                            <span style="color: white; font-weight: 700; font-size: 0.95em;">{percentage:.1f}%</span>
+                        </div>
                     </div>
                 </div>
-            </div>
             """
 
         stage_html += """
@@ -831,13 +884,22 @@ def classify_stage(audio_input):
 
     except Exception as e:
         error_msg = f"""
-        <div style="background: linear-gradient(135deg, #fee2e2 0%, #fecaca 100%); padding: 25px; border-radius: 15px; border-left: 6px solid #dc2626; box-shadow: 0 4px 6px rgba(0,0,0,0.1);">
-            <h2 style="color: #991b1b; margin: 0 0 10px 0;">❌ Stage Classification Error</h2>
-            <p style="color: #7f1d1d; font-size: 1.05em; margin: 0;">
-                <strong>Error Details:</strong> {str(e)}
-                <br><br>
-                Please ensure disease detection was completed successfully and try again.
-            </p>
+        <div style="background: linear-gradient(135deg, #fee2e2 0%, #fecaca 100%); padding: 35px; border-radius: 20px; box-shadow: 0 8px 20px rgba(220,38,38,0.2);">
+            <div style="display: flex; align-items: center; margin-bottom: 20px;">
+                <div style="background: #dc2626; width: 60px; height: 60px; border-radius: 50%; display: flex; align-items: center; justify-content: center; margin-right: 20px;">
+                    <span style="font-size: 32px;">❌</span>
+                </div>
+                <div>
+                    <h2 style="color: #991b1b; margin: 0; font-size: 1.8em;">Stage Classification Error</h2>
+                </div>
+            </div>
+            <div style="background: white; padding: 25px; border-radius: 10px;">
+                <p style="color: #7f1d1d; font-size: 1.1em; margin: 0;">
+                    <strong>Error Details:</strong> {str(e)}
+                    <br><br>
+                    Please ensure disease detection was completed successfully.
+                </p>
+            </div>
         </div>
         """
         return error_msg, None, None, None
@@ -849,129 +911,158 @@ def clear_all():
     current_features = None
     current_prediction = None
 
+    ready_msg = """
+    <div style="text-align: center; padding: 80px 30px; background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); border-radius: 20px; box-shadow: 0 10px 30px rgba(0,0,0,0.2);">
+        <div style="background: rgba(255,255,255,0.95); padding: 40px; border-radius: 15px; display: inline-block;">
+            <h2 style="color: #667eea; margin: 0 0 20px 0; font-size: 2em;">🎤 Ready for Voice Analysis</h2>
+            <p style="color: #666; font-size: 1.2em; margin: 0; line-height: 1.6;">
+                Please record your voice using the microphone<br>or upload an audio file to begin
+            </p>
+        </div>
+    </div>
+    """
+
+    stage_msg = """
+    <div style="text-align: center; padding: 80px 30px; background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); border-radius: 20px; box-shadow: 0 10px 30px rgba(0,0,0,0.2);">
+        <div style="background: rgba(255,255,255,0.95); padding: 40px; border-radius: 15px; display: inline-block;">
+            <h2 style="color: #667eea; margin: 0 0 20px 0; font-size: 2em;">ℹ️ No Audio Input</h2>
+            <p style="color: #666; font-size: 1.2em; margin: 0; line-height: 1.6;">
+                Please complete disease detection<br>in the first tab before proceeding
+            </p>
+        </div>
+    </div>
+    """
+
     return (
-        None,
-        None,
-        """
-        <div style="text-align: center; padding: 60px 20px; background: linear-gradient(135deg, #e0f2fe 0%, #dbeafe 100%); border-radius: 15px; border: 2px dashed #3b82f6;">
-            <h2 style="color: #1e40af; margin-bottom: 15px;">🎤 Ready for Analysis</h2>
-            <p style="color: #3b82f6; font-size: 1.1em;">Please record or upload an audio file to begin voice analysis</p>
-        </div>
-        """,
-        None,
-        """
-        <div style="text-align: center; padding: 60px 20px; background: linear-gradient(135deg, #e0f2fe 0%, #dbeafe 100%); border-radius: 15px; border: 2px dashed #3b82f6;">
-            <h2 style="color: #1e40af; margin-bottom: 15px;">ℹ️ No Audio Input</h2>
-            <p style="color: #3b82f6; font-size: 1.1em;">Please provide audio in the <strong>Disease Detection</strong> tab first</p>
-        </div>
-        """,
-        None,
-        None,
-        None
+        None,  # audio_input
+        ready_msg,  # result_output
+        None,  # features_output
+        stage_msg,  # stage_output
+        None,  # stage_features_output
+        None,  # stage_img1
+        None   # stage_img2
     )
 
 # ============================================================================
-# CREATE GRADIO INTERFACE
+# CREATE PROFESSIONAL APP INTERFACE
 # ============================================================================
 
 custom_css = """
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap');
+
+* {
+    font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Arial, sans-serif;
+}
+
 .gradio-container {
-    font-family: 'Inter', 'Segoe UI', Arial, sans-serif !important;
     max-width: 1600px !important;
+    background: linear-gradient(135deg, #f8fafc 0%, #e2e8f0 100%);
 }
+
 .tab-nav button {
-    font-size: 17px !important;
-    font-weight: 600 !important;
-    padding: 14px 28px !important;
-    border-radius: 8px 8px 0 0 !important;
+    font-size: 18px;
+    font-weight: 700;
+    padding: 18px 35px;
+    border-radius: 12px 12px 0 0;
+    transition: all 0.3s ease;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
 }
+
 .tab-nav button.selected {
-    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%) !important;
+    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
     color: white !important;
+    box-shadow: 0 4px 15px rgba(102, 126, 234, 0.4);
 }
+
+.tab-nav button:hover {
+    transform: translateY(-2px);
+}
+
 h1, h2, h3 {
-    font-family: 'Inter', sans-serif !important;
+    font-family: 'Inter', sans-serif;
+    font-weight: 800;
+}
+
+button {
+    font-weight: 600 !important;
+    transition: all 0.3s ease !important;
+}
+
+button:hover {
+    transform: translateY(-2px) !important;
+    box-shadow: 0 6px 20px rgba(0,0,0,0.15) !important;
+}
+
+.gr-button-primary {
+    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%) !important;
+    border: none !important;
+}
+
+.gr-button-secondary {
+    background: linear-gradient(135deg, #64748b 0%, #475569 100%) !important;
+    border: none !important;
 }
 """
 
-with gr.Blocks(
-    title="Parkinson's Disease Detection System",
-    theme=gr.themes.Soft(
-        primary_hue="indigo",
-        secondary_hue="purple",
-        neutral_hue="slate",
-    ),
-    css=custom_css
-) as demo:
+with gr.Blocks(title="Parkinson's Disease Detection System", theme=gr.themes.Soft(), css=custom_css) as demo:
 
-    # Header
+    # Professional Header
     gr.Markdown("""
-    <div style="text-align: center; padding: 30px; background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); border-radius: 15px; margin-bottom: 30px; box-shadow: 0 6px 12px rgba(0,0,0,0.15);">
-        <h1 style="color: white; margin: 0; font-size: 2.8em; font-weight: 700;">🏥 Parkinson's Disease Detection System</h1>
-        <p style="color: #e0e7ff; margin-top: 12px; font-size: 1.3em; font-weight: 500;">Advanced AI-Powered Voice Analysis Platform</p>
+    <div style="text-align: center; padding: 50px 30px; background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); border-radius: 25px; margin-bottom: 35px; box-shadow: 0 15px 35px rgba(102,126,234,0.3);">
+        <h1 style="color: white; margin: 0; font-size: 3.2em; font-weight: 900; text-shadow: 2px 2px 4px rgba(0,0,0,0.2);">🏥 Parkinson's Disease Detection</h1>
+        <p style="color: #e0e7ff; margin-top: 15px; font-size: 1.5em; font-weight: 600;">Advanced AI-Powered Voice Analysis Platform</p>
+        <div style="margin-top: 25px; padding: 15px 30px; background: rgba(255,255,255,0.15); border-radius: 50px; display: inline-block; backdrop-filter: blur(10px);">
+            <p style="color: white; margin: 0; font-size: 1.1em; font-weight: 500;">Professional Medical-Grade Diagnostic Tool</p>
+        </div>
     </div>
     """)
 
     gr.Markdown("""
-    <div style="background: linear-gradient(135deg, #f0f9ff 0%, #e0f2fe 100%); padding: 20px; border-radius: 10px; border-left: 5px solid #0ea5e9; margin-bottom: 25px; box-shadow: 0 2px 6px rgba(0,0,0,0.08);">
-        <p style="margin: 0; color: #0c4a6e; font-size: 1.05em; line-height: 1.8;">
-            <strong>📌 System Overview:</strong> This professional-grade diagnostic tool utilizes <strong>15 voice biomarkers</strong> and
-            machine learning algorithms to detect Parkinson's Disease and classify disease progression stages.
-            The system employs weighted voting mechanisms and advanced signal processing for accurate analysis.
+    <div style="background: white; padding: 30px; border-radius: 15px; margin-bottom: 30px; box-shadow: 0 4px 20px rgba(0,0,0,0.08); border-left: 6px solid #667eea;">
+        <p style="margin: 0; color: #334155; font-size: 1.15em; line-height: 2;">
+            <strong style="color: #667eea; font-size: 1.2em;">📌 System Overview:</strong> This professional diagnostic platform analyzes <strong>15 voice biomarkers</strong> using advanced machine learning algorithms to detect Parkinson's Disease and classify disease progression stages. The system employs weighted voting mechanisms and state-of-the-art signal processing for maximum accuracy.
         </p>
     </div>
     """)
 
+    # Tabs
     with gr.Tabs() as tabs:
 
         # ========== TAB 1: DISEASE DETECTION ==========
         with gr.Tab("🔍 Disease Detection", id=0):
             with gr.Row():
-                with gr.Column(scale=1):
+                with gr.Column(scale=2):
                     gr.Markdown("""
-                    <div style="background: linear-gradient(135deg, #dbeafe 0%, #bfdbfe 100%); padding: 20px; border-radius: 10px; margin-bottom: 20px; box-shadow: 0 2px 6px rgba(0,0,0,0.08);">
-                        <h3 style="color: #1e40af; margin: 0 0 10px 0;">🎤 Audio Input</h3>
-                        <p style="color: #1e3a8a; margin: 0; font-size: 0.95em;">Record your voice or upload an audio file for analysis</p>
+                    <div style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); padding: 25px; border-radius: 15px; margin-bottom: 25px; box-shadow: 0 6px 20px rgba(102,126,234,0.25);">
+                        <h3 style="color: white; margin: 0 0 10px 0; font-size: 1.6em;">🎤 Voice Input</h3>
+                        <p style="color: #e0e7ff; margin: 0; font-size: 1.05em;">Record your voice or upload an audio file for comprehensive analysis</p>
                     </div>
                     """)
 
-                    with gr.Tabs():
-                        with gr.Tab("📝 Record"):
-                            audio_record = gr.Audio(
-                                sources=["microphone"],
-                                type="numpy",
-                                label="Record Your Voice",
-                                format="wav"
-                            )
-                            gr.Markdown("""
-                            <div style="background: #fef3c7; padding: 12px; border-radius: 8px; margin-top: 10px; border-left: 3px solid #f59e0b;">
-                                <strong style="color: #92400e;">🎙️ Recording Tips:</strong>
-                                <ul style="margin: 8px 0; padding-left: 20px; color: #78350f;">
-                                    <li>Find a quiet environment</li>
-                                    <li>Speak clearly for 5-10 seconds</li>
-                                    <li>Sustain a vowel sound (e.g., "Aaaah")</li>
-                                    <li>Maintain consistent volume</li>
-                                </ul>
-                            </div>
-                            """)
-
-                        with gr.Tab("📁 Upload"):
-                            audio_upload = gr.Audio(
-                                sources=["upload"],
-                                type="filepath",
-                                label="Upload Audio File",
-                                format="wav"
-                            )
-                            gr.Markdown("""
-                            <div style="background: #dbeafe; padding: 12px; border-radius: 8px; margin-top: 10px; border-left: 3px solid #3b82f6;">
-                                <strong style="color: #1e40af;">📂 Supported Formats:</strong> WAV, MP3, FLAC
-                                <br><strong style="color: #1e40af;">💡 Best Quality:</strong> 16kHz or higher sample rate
-                            </div>
-                            """)
+                    audio_input = gr.Audio(
+                        sources=["microphone", "upload"],
+                        type="numpy",
+                        label="🎙️ Record Voice or Upload Audio File",
+                        format="wav"
+                    )
 
                     gr.Markdown("""
-                    <div style="background: linear-gradient(135deg, #f3e8ff 0%, #e9d5ff 100%); padding: 20px; border-radius: 10px; margin: 20px 0; box-shadow: 0 2px 6px rgba(0,0,0,0.08);">
-                        <h3 style="color: #7c3aed; margin: 0 0 10px 0;">⚙️ Processing Settings</h3>
+                    <div style="background: linear-gradient(135deg, #fef3c7 0%, #fde68a 100%); padding: 20px; border-radius: 12px; margin: 15px 0; border-left: 4px solid #f59e0b;">
+                        <strong style="color: #92400e; font-size: 1.1em;">🎙️ Recording Guidelines:</strong>
+                        <ul style="margin: 10px 0 0 0; padding-left: 25px; color: #78350f; line-height: 1.9;">
+                            <li><strong>Environment:</strong> Find a quiet location without background noise</li>
+                            <li><strong>Duration:</strong> Speak clearly for 5-10 seconds</li>
+                            <li><strong>Task:</strong> Sustain a vowel sound (e.g., "Aaaah") or count from 1-10</li>
+                            <li><strong>Volume:</strong> Maintain consistent, comfortable speaking volume</li>
+                            <li><strong>Formats:</strong> WAV, MP3, FLAC supported | Best: 16kHz+ sample rate</li>
+                        </ul>
+                    </div>
+                    """)
+
+                    gr.Markdown("""
+                    <div style="background: linear-gradient(135deg, #dbeafe 0%, #bfdbfe 100%); padding: 20px; border-radius: 12px; margin-bottom: 20px;">
+                        <h3 style="color: #1e40af; margin: 0 0 15px 0; font-size: 1.3em;">⚙️ Processing Settings</h3>
                     </div>
                     """)
 
@@ -979,51 +1070,57 @@ with gr.Blocks(
                         choices=["light", "medium", "heavy"],
                         value="medium",
                         label="Noise Reduction Strength",
-                        info="Applies to recorded audio"
+                        info="Select based on recording environment quality"
                     )
 
                     with gr.Row():
-                        analyze_btn = gr.Button("🔬 Analyze Audio", variant="primary", size="lg", scale=2)
+                        analyze_btn = gr.Button("🔬 Analyze Voice", variant="primary", size="lg", scale=3)
                         clear_btn = gr.Button("🔄 Clear All", variant="secondary", size="lg", scale=1)
 
-                with gr.Column(scale=2):
+                with gr.Column(scale=3):
                     gr.Markdown("""
-                    <div style="background: linear-gradient(135deg, #f0fdf4 0%, #dcfce7 100%); padding: 20px; border-radius: 10px; margin-bottom: 20px; box-shadow: 0 2px 6px rgba(0,0,0,0.08);">
-                        <h3 style="color: #065f46; margin: 0 0 10px 0;">📊 Analysis Results</h3>
+                    <div style="background: linear-gradient(135deg, #d1fae5 0%, #a7f3d0 100%); padding: 25px; border-radius: 15px; margin-bottom: 25px; box-shadow: 0 6px 20px rgba(16,185,129,0.25);">
+                        <h3 style="color: #065f46; margin: 0 0 10px 0; font-size: 1.6em;">📊 Analysis Results</h3>
+                        <p style="color: #047857; margin: 0; font-size: 1.05em;">Comprehensive diagnostic report with clinical recommendations</p>
                     </div>
                     """)
 
                     result_output = gr.HTML(
                         value="""
-                        <div style="text-align: center; padding: 60px 20px; background: linear-gradient(135deg, #e0f2fe 0%, #dbeafe 100%); border-radius: 15px; border: 2px dashed #3b82f6;">
-                            <h2 style="color: #1e40af; margin-bottom: 15px;">🎤 Ready for Analysis</h2>
-                            <p style="color: #3b82f6; font-size: 1.1em;">Please record or upload an audio file to begin voice analysis</p>
+                        <div style="text-align: center; padding: 80px 30px; background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); border-radius: 20px; box-shadow: 0 10px 30px rgba(0,0,0,0.2);">
+                            <div style="background: rgba(255,255,255,0.95); padding: 40px; border-radius: 15px; display: inline-block;">
+                                <h2 style="color: #667eea; margin: 0 0 20px 0; font-size: 2em;">🎤 Ready for Voice Analysis</h2>
+                                <p style="color: #666; font-size: 1.2em; margin: 0; line-height: 1.6;">
+                                    Please record your voice using the microphone<br>or upload an audio file to begin
+                                </p>
+                            </div>
                         </div>
                         """
                     )
 
                     with gr.Accordion("🔬 Detailed Feature Analysis", open=False):
                         features_output = gr.DataFrame(
-                            label="15 Extracted Voice Features",
+                            label="15 Extracted Voice Features (Biomarkers)",
                             wrap=True
                         )
 
         # ========== TAB 2: STAGE CLASSIFICATION ==========
         with gr.Tab("📈 Stage Classification", id=1):
             gr.Markdown("""
-            <div style="background: linear-gradient(135deg, #fef3c7 0%, #fde68a 100%); padding: 20px; border-radius: 10px; margin-bottom: 20px; box-shadow: 0 2px 6px rgba(0,0,0,0.08);">
-                <h3 style="color: #92400e; margin: 0 0 10px 0;">📈 Disease Progression Analysis</h3>
-                <p style="color: #78350f; margin: 0; font-size: 1.05em;">
-                    Detailed stage classification based on weighted feature voting.
-                    The system classifies disease progression into four stages: Early, Mild, Moderate, and Severe.
+            <div style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); padding: 30px; border-radius: 15px; margin-bottom: 30px; box-shadow: 0 6px 20px rgba(102,126,234,0.25);">
+                <h3 style="color: white; margin: 0 0 15px 0; font-size: 1.8em;">📈 Disease Progression Analysis</h3>
+                <p style="color: #e0e7ff; margin: 0; font-size: 1.15em; line-height: 1.7;">
+                    Advanced stage classification using weighted feature voting algorithm.
+                    The system classifies disease progression into four distinct stages: <strong>Early</strong>, <strong>Mild</strong>, <strong>Moderate</strong>, and <strong>Severe</strong>.
                 </p>
             </div>
             """)
 
+            # ✅ IMAGES FIRST (TOP PRIORITY)
             gr.Markdown("""
-            <div style="background: linear-gradient(135deg, #f3e8ff 0%, #e9d5ff 100%); padding: 20px; border-radius: 10px; margin: 25px 0; box-shadow: 0 2px 6px rgba(0,0,0,0.08);">
-                <h3 style="color: #7c3aed; margin: 0 0 10px 0;">🖼️ Stage Visual References</h3>
-                <p style="color: #6b21a8; margin: 0; font-size: 0.95em;">Clinical and anatomical reference images for the diagnosed stage</p>
+            <div style="background: linear-gradient(135deg, #fef3c7 0%, #fde68a 100%); padding: 25px; border-radius: 15px; margin: 25px 0; box-shadow: 0 4px 15px rgba(245,158,11,0.2);">
+                <h3 style="color: #92400e; margin: 0 0 10px 0; font-size: 1.5em;">🖼️ Clinical Stage Visual References</h3>
+                <p style="color: #78350f; margin: 0; font-size: 1.05em;">Medical imaging and anatomical references for the diagnosed stage</p>
             </div>
             """)
 
@@ -1031,118 +1128,142 @@ with gr.Blocks(
                 stage_img1 = gr.Image(
                     label="Clinical Reference Image 1",
                     type="pil",
-                    height=350,
+                    height=400,
                     container=True
                 )
                 stage_img2 = gr.Image(
                     label="Clinical Reference Image 2",
                     type="pil",
-                    height=350,
+                    height=400,
                     container=True
                 )
 
+            # ✅ THEN STAGE OUTPUT
             stage_output = gr.HTML(
                 value="""
-                <div style="text-align: center; padding: 60px 20px; background: linear-gradient(135deg, #e0f2fe 0%, #dbeafe 100%); border-radius: 15px; border: 2px dashed #3b82f6;">
-                    <h2 style="color: #1e40af; margin-bottom: 15px;">ℹ️ No Audio Input</h2>
-                    <p style="color: #3b82f6; font-size: 1.1em;">Please provide audio in the <strong>Disease Detection</strong> tab first</p>
+                <div style="text-align: center; padding: 80px 30px; background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); border-radius: 20px; box-shadow: 0 10px 30px rgba(0,0,0,0.2);">
+                    <div style="background: rgba(255,255,255,0.95); padding: 40px; border-radius: 15px; display: inline-block;">
+                        <h2 style="color: #667eea; margin: 0 0 20px 0; font-size: 2em;">ℹ️ No Audio Input</h2>
+                        <p style="color: #666; font-size: 1.2em; margin: 0; line-height: 1.6;">
+                            Please complete disease detection<br>in the first tab before proceeding
+                        </p>
+                    </div>
                 </div>
                 """
             )
 
+            # ✅ THEN ACCORDION
             with gr.Accordion("📊 Feature Contribution Analysis", open=False):
                 stage_features_output = gr.DataFrame(
                     label="Weighted Feature Contributions to Stage Prediction",
                     wrap=True
                 )
                 gr.Markdown("""
-                <div style="background: linear-gradient(135deg, #dbeafe 0%, #bfdbfe 100%); padding: 15px; border-radius: 8px; margin-top: 10px;">
-                    <strong style="color: #1e40af;">Weighting System:</strong>
-                    <ul style="margin: 8px 0; padding-left: 20px; color: #1e3a8a;">
-                        <li><strong>Weight 5 (High):</strong> NHR, HNR, RPDE</li>
-                        <li><strong>Weight 4:</strong> PPE, DFA, Jitter(%), Shimmer</li>
-                        <li><strong>Weight 3:</strong> Shimmer:APQ3, APQ5, Jitter:RAP, PPQ5</li>
-                        <li><strong>Weight 2:</strong> Shimmer(dB), DDA, Jitter:DDP</li>
-                        <li><strong>Weight 1:</strong> Shimmer:APQ11</li>
-                    </ul>
+                <div style="background: white; padding: 25px; border-radius: 12px; margin-top: 15px; border-left: 4px solid #667eea;">
+                    <strong style="color: #667eea; font-size: 1.2em;">Weighting System Methodology:</strong>
+                    <div style="margin-top: 15px; color: #334155; line-height: 2;">
+                        <div style="padding: 10px; background: #f8fafc; border-radius: 8px; margin: 8px 0;">
+                            <strong style="color: #ef4444;">● Weight 5 (Highest Impact):</strong> NHR, HNR, RPDE
+                        </div>
+                        <div style="padding: 10px; background: #f8fafc; border-radius: 8px; margin: 8px 0;">
+                            <strong style="color: #f59e0b;">● Weight 4 (High Impact):</strong> PPE, DFA, Jitter(%), Shimmer
+                        </div>
+                        <div style="padding: 10px; background: #f8fafc; border-radius: 8px; margin: 8px 0;">
+                            <strong style="color: #3b82f6;">● Weight 3 (Moderate Impact):</strong> Shimmer:APQ3, APQ5, Jitter:RAP, PPQ5
+                        </div>
+                        <div style="padding: 10px; background: #f8fafc; border-radius: 8px; margin: 8px 0;">
+                            <strong style="color: #10b981;">● Weight 2 (Low Impact):</strong> Shimmer(dB), DDA, Jitter:DDP
+                        </div>
+                        <div style="padding: 10px; background: #f8fafc; border-radius: 8px; margin: 8px 0;">
+                            <strong style="color: #64748b;">● Weight 1 (Minimal Impact):</strong> Shimmer:APQ11
+                        </div>
+                    </div>
                 </div>
                 """)
 
     # Event Handlers
-    def process_both_inputs(rec, upl, noise):
-        audio = rec if rec is not None else upl
-        return detect_disease(audio, noise)
-
-    def process_stage_both(rec, upl):
-        audio = rec if rec is not None else upl
-        return classify_stage(audio)
-
     analyze_btn.click(
-        fn=process_both_inputs,
-        inputs=[audio_record, audio_upload, noise_reduction],
+        fn=detect_disease,
+        inputs=[audio_input, noise_reduction],
         outputs=[result_output, features_output]
     ).then(
-        fn=process_stage_both,
-        inputs=[audio_record, audio_upload],
+        fn=classify_stage,
+        inputs=[audio_input],
         outputs=[stage_output, stage_features_output, stage_img1, stage_img2]
     )
 
     clear_btn.click(
         fn=clear_all,
         inputs=[],
-        outputs=[audio_record, audio_upload, result_output, features_output,
+        outputs=[audio_input, result_output, features_output,
                 stage_output, stage_features_output, stage_img1, stage_img2]
     )
 
+    # Auto-reset on audio input change
     def reset_outputs():
-        return (
-            """
-            <div style="text-align: center; padding: 60px 20px; background: linear-gradient(135deg, #e0f2fe 0%, #dbeafe 100%); border-radius: 15px; border: 2px dashed #3b82f6;">
-                <h2 style="color: #1e40af; margin-bottom: 15px;">🎤 Ready for Analysis</h2>
-                <p style="color: #3b82f6; font-size: 1.1em;">Please record or upload an audio file to begin voice analysis</p>
+        ready_msg = """
+        <div style="text-align: center; padding: 80px 30px; background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); border-radius: 20px; box-shadow: 0 10px 30px rgba(0,0,0,0.2);">
+            <div style="background: rgba(255,255,255,0.95); padding: 40px; border-radius: 15px; display: inline-block;">
+                <h2 style="color: #667eea; margin: 0 0 20px 0; font-size: 2em;">🎤 Ready for Voice Analysis</h2>
+                <p style="color: #666; font-size: 1.2em; margin: 0; line-height: 1.6;">
+                    Please record your voice using the microphone<br>or upload an audio file to begin
+                </p>
             </div>
-            """,
-            None,
-            """
-            <div style="text-align: center; padding: 60px 20px; background: linear-gradient(135deg, #e0f2fe 0%, #dbeafe 100%); border-radius: 15px; border: 2px dashed #3b82f6;">
-                <h2 style="color: #1e40af; margin-bottom: 15px;">ℹ️ No Audio Input</h2>
-                <p style="color: #3b82f6; font-size: 1.1em;">Please provide audio in the <strong>Disease Detection</strong> tab first</p>
-            </div>
-            """,
-            None,
-            None,
-            None
-        )
+        </div>
+        """
 
-    audio_record.change(
+        stage_msg = """
+        <div style="text-align: center; padding: 80px 30px; background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); border-radius: 20px; box-shadow: 0 10px 30px rgba(0,0,0,0.2);">
+            <div style="background: rgba(255,255,255,0.95); padding: 40px; border-radius: 15px; display: inline-block;">
+                <h2 style="color: #667eea; margin: 0 0 20px 0; font-size: 2em;">ℹ️ No Audio Input</h2>
+                <p style="color: #666; font-size: 1.2em; margin: 0; line-height: 1.6;">
+                    Please complete disease detection<br>in the first tab before proceeding
+                </p>
+            </div>
+        </div>
+        """
+
+        return (ready_msg, None, stage_msg, None, None, None)
+
+    audio_input.change(
         fn=reset_outputs,
         inputs=[],
         outputs=[result_output, features_output, stage_output, stage_features_output, stage_img1, stage_img2]
     )
 
-    audio_upload.change(
-        fn=reset_outputs,
-        inputs=[],
-        outputs=[result_output, features_output, stage_output, stage_features_output, stage_img1, stage_img2]
-    )
+    # Footer
+    gr.Markdown("""
+    <div style="text-align: center; padding: 25px; background: linear-gradient(135deg, #f1f5f9 0%, #e2e8f0 100%); border-radius: 15px; margin-top: 40px; border-top: 3px solid #667eea;">
+        <p style="color: #64748b; margin: 0; font-size: 0.95em; line-height: 1.8;">
+            <strong style="color: #667eea;">⚠️ Medical Disclaimer:</strong> This system is designed for research and educational purposes only.
+            <br>It should NOT be used as the sole basis for medical diagnosis or treatment decisions.
+            <br>Always consult qualified healthcare professionals for proper medical evaluation and care.
+        </p>
+    </div>
+    """)
 
 # ============================================================================
-# LAUNCH
+# LAUNCH INTERFACE
 # ============================================================================
 
 if __name__ == "__main__":
     print("\n" + "="*80)
-    print("LAUNCHING PARKINSON'S DISEASE DETECTION SYSTEM")
+    print("LAUNCHING PROFESSIONAL MEDICAL APP INTERFACE")
     print("="*80)
-    print("\n🚀 Starting application...")
-    print("📊 Two-Tab Professional Interface")
-    print("🎯 Tab 1: Disease Detection")
-    print("📈 Tab 2: Stage Classification with Visual References")
+    print("\n🚀 Starting Parkinson's Disease Detection System...")
+    print("📊 Professional Two-Tab Interface")
+    print("🎯 Tab 1: Disease Detection with Microphone Input")
+    print("📈 Tab 2: Stage Classification (Images First)")
     print("\n" + "="*80)
 
     demo.launch(
         share=False,
         server_name="0.0.0.0",
         server_port=7860,
-        show_error=True
+        show_error=True,
+        debug=False,
+        quiet=False
     )
+
+    print("\n✅ Interface launched successfully!")
+    print("📱 Access at http://localhost:7860")
