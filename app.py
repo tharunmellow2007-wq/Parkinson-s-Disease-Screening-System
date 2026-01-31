@@ -16,25 +16,25 @@ import warnings
 warnings.filterwarnings('ignore')
 
 """
-Enhanced Parkinson's Disease Detection System
-Professional Medical-Grade Interface with Gradio
+Parkinson's Disease Detection - Professional Gradio Interface
+Enhanced UI/UX with Medical-Grade Design
 """
 
 print("="*80)
-print("PARKINSON'S DISEASE DETECTION - PROFESSIONAL MEDICAL INTERFACE")
+print("PARKINSON'S DISEASE DETECTION - PROFESSIONAL INTERFACE")
 print("="*80)
 
 # ============================================================================
 # CONFIGURATION
 # ============================================================================
 
-# Adjust these paths based on your deployment environment
+# Configure paths (modify these for your deployment)
 MODEL_DIR = os.getenv('MODEL_DIR', './models')
-OUTPUT_DIR = os.getenv('OUTPUT_DIR', './results')
+OUTPUT_DIR = os.getenv('OUTPUT_DIR', './outputs')
 IMAGES_DIR = os.getenv('IMAGES_DIR', './images')
 os.makedirs(OUTPUT_DIR, exist_ok=True)
 
-# Global variables for state management
+# Global state management
 current_features = None
 current_prediction = None
 
@@ -470,23 +470,38 @@ def classify_parkinsons_stage_weighted(features):
 # LOAD MODEL
 # ============================================================================
 
-def load_model_components():
-    """Load model, scaler, and feature info"""
-    try:
-        with open(f'{MODEL_DIR}/parkinsons_ensemble_model.pkl', 'rb') as f:
+print("\nLoading model components...")
+try:
+    model_path = os.path.join(MODEL_DIR, 'parkinsons_ensemble_model.pkl')
+    scaler_path = os.path.join(MODEL_DIR, 'feature_scaler.pkl')
+    info_path = os.path.join(MODEL_DIR, 'feature_info.json')
+    
+    if os.path.exists(model_path):
+        with open(model_path, 'rb') as f:
             model = pickle.load(f)
-        with open(f'{MODEL_DIR}/feature_scaler.pkl', 'rb') as f:
+        with open(scaler_path, 'rb') as f:
             scaler = pickle.load(f)
-        with open(f'{MODEL_DIR}/feature_info.json', 'r') as f:
+        with open(info_path, 'r') as f:
             feature_info = json.load(f)
         print("✓ Model loaded successfully!")
-        return model, scaler, feature_info
-    except Exception as e:
-        print(f"⚠️ Error loading model: {e}")
-        print("⚠️ Running in demo mode without actual model")
-        return None, None, None
-
-model, scaler, feature_info = load_model_components()
+    else:
+        print("⚠️ Model files not found - using demo mode")
+        model = None
+        scaler = None
+        feature_info = {'feature_names': [
+            'Jitter(%)', 'Jitter:RAP', 'Jitter:PPQ5', 'Jitter:DDP',
+            'Shimmer', 'Shimmer(dB)', 'Shimmer:APQ3', 'Shimmer:APQ5',
+            'Shimmer:APQ11', 'Shimmer:DDA', 'NHR', 'HNR', 'RPDE', 'DFA', 'PPE'
+        ]}
+except Exception as e:
+    print(f"⚠️ Error loading model: {e}")
+    model = None
+    scaler = None
+    feature_info = {'feature_names': [
+        'Jitter(%)', 'Jitter:RAP', 'Jitter:PPQ5', 'Jitter:DDP',
+        'Shimmer', 'Shimmer(dB)', 'Shimmer:APQ3', 'Shimmer:APQ5',
+        'Shimmer:APQ11', 'Shimmer:DDA', 'NHR', 'HNR', 'RPDE', 'DFA', 'PPE'
+    ]}
 
 # ============================================================================
 # IMAGE LOADING FUNCTION
@@ -512,7 +527,6 @@ def load_stage_images(stage):
     elif len(images) == 1:
         return images[0], None
     else:
-        print(f"⚠️ No images found for stage {stage}")
         return None, None
 
 # ============================================================================
@@ -541,7 +555,6 @@ def detect_disease(audio_input, noise_reduction):
             timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
             temp_path = f'/tmp/recorded_{timestamp}.wav'
             sf.write(temp_path, audio_array, sr)
-            audio_source = "Recorded Audio"
 
             processed_audio, sample_rate, quality_metrics = preprocess_parkinsons_audio(
                 audio_path=temp_path,
@@ -553,32 +566,23 @@ def detect_disease(audio_input, noise_reduction):
 
         else:
             temp_path = audio_input
-            audio_source = "Uploaded File"
-
-            audio_array, sample_rate = librosa.load(temp_path, sr=None, mono=True)
-            quality_metrics = {
-                'duration': len(audio_array) / sample_rate,
-                'sample_rate': sample_rate
-            }
-
             features = extract_all_features(audio_path=temp_path)
 
         # Disease prediction
-        if model is not None and scaler is not None and feature_info is not None:
+        if model is not None and scaler is not None:
             feature_vector = [features[name] for name in feature_info['feature_names']]
             feature_scaled = scaler.transform([feature_vector])
             prediction = model.predict(feature_scaled)[0]
         else:
-            # Demo mode - use simple heuristic
-            prediction = 1 if features['Jitter(%)'] > 0.006 else 0
+            # Demo mode - random prediction
+            prediction = np.random.choice([0, 1])
 
         # Store globally for Tab 2
         current_features = features
         current_prediction = prediction
 
-        # Build result with consistent color scheme
+        # Build result
         if prediction == 1:
-            # Parkinson's Detected
             result_html = f"""
             <div style="background: linear-gradient(135deg, #fee2e2 0%, #fecaca 100%); padding: 25px; border-radius: 15px; border-left: 6px solid #ef4444; margin-bottom: 20px; box-shadow: 0 4px 6px rgba(0,0,0,0.1);">
                 <h2 style="color: #991b1b; margin: 0 0 10px 0;">⚠️ Parkinson's Disease Detected</h2>
@@ -618,7 +622,6 @@ def detect_disease(audio_input, noise_reduction):
             </div>
             """
         else:
-            # Healthy
             result_html = f"""
             <div style="background: linear-gradient(135deg, #d1fae5 0%, #a7f3d0 100%); padding: 25px; border-radius: 15px; border-left: 6px solid #10b981; margin-bottom: 20px; box-shadow: 0 4px 6px rgba(0,0,0,0.1);">
                 <h2 style="color: #065f46; margin: 0 0 10px 0;">✅ Healthy Voice Profile</h2>
@@ -734,7 +737,7 @@ def classify_stage(audio_input):
         # Load images
         stage_img1, stage_img2 = load_stage_images(stage_result['stage'])
 
-        # Build stage output HTML with consistent color scheme
+        # Build stage output HTML
         stage_html = f"""
         <div style="background: linear-gradient(135deg, {stage_result['bg_color']} 0%, {stage_result['color']}20 100%); padding: 30px; border-radius: 15px; border-left: 6px solid {stage_result['color']}; margin-bottom: 20px; box-shadow: 0 4px 6px rgba(0,0,0,0.1);">
             <h2 style="color: {stage_result['color']}; margin: 0 0 10px 0;">Stage {stage_result['stage']}: {stage_result['stage_name']}</h2>
@@ -847,51 +850,59 @@ def clear_all():
     current_prediction = None
 
     return (
-        None,  # audio_record
-        None,  # audio_upload
+        None,
+        None,
         """
         <div style="text-align: center; padding: 60px 20px; background: linear-gradient(135deg, #e0f2fe 0%, #dbeafe 100%); border-radius: 15px; border: 2px dashed #3b82f6;">
             <h2 style="color: #1e40af; margin-bottom: 15px;">🎤 Ready for Analysis</h2>
             <p style="color: #3b82f6; font-size: 1.1em;">Please record or upload an audio file to begin voice analysis</p>
         </div>
-        """,  # result_output
-        None,  # features_output
+        """,
+        None,
         """
         <div style="text-align: center; padding: 60px 20px; background: linear-gradient(135deg, #e0f2fe 0%, #dbeafe 100%); border-radius: 15px; border: 2px dashed #3b82f6;">
             <h2 style="color: #1e40af; margin-bottom: 15px;">ℹ️ No Audio Input</h2>
             <p style="color: #3b82f6; font-size: 1.1em;">Please provide audio in the <strong>Disease Detection</strong> tab first</p>
         </div>
-        """,  # stage_output
-        None,  # stage_features_output
-        None,  # stage_img1
-        None   # stage_img2
+        """,
+        None,
+        None,
+        None
     )
 
 # ============================================================================
-# CREATE ENHANCED GRADIO INTERFACE
+# CREATE GRADIO INTERFACE
 # ============================================================================
 
 custom_css = """
 .gradio-container {
-    font-family: 'Inter', 'Segoe UI', Arial, sans-serif;
-    max-width: 1400px !important;
+    font-family: 'Inter', 'Segoe UI', Arial, sans-serif !important;
+    max-width: 1600px !important;
 }
 .tab-nav button {
-    font-size: 17px;
-    font-weight: 600;
-    padding: 14px 28px;
-    border-radius: 8px 8px 0 0;
+    font-size: 17px !important;
+    font-weight: 600 !important;
+    padding: 14px 28px !important;
+    border-radius: 8px 8px 0 0 !important;
 }
 .tab-nav button.selected {
-    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%) !important;
     color: white !important;
 }
 h1, h2, h3 {
-    font-family: 'Inter', sans-serif;
+    font-family: 'Inter', sans-serif !important;
 }
 """
 
-with gr.Blocks(title="Parkinson's Disease Detection System", theme=gr.themes.Soft(), css=custom_css) as demo:
+with gr.Blocks(
+    title="Parkinson's Disease Detection System",
+    theme=gr.themes.Soft(
+        primary_hue="indigo",
+        secondary_hue="purple",
+        neutral_hue="slate",
+    ),
+    css=custom_css
+) as demo:
 
     # Header
     gr.Markdown("""
@@ -911,7 +922,6 @@ with gr.Blocks(title="Parkinson's Disease Detection System", theme=gr.themes.Sof
     </div>
     """)
 
-    # Tabs
     with gr.Tabs() as tabs:
 
         # ========== TAB 1: DISEASE DETECTION ==========
@@ -1010,7 +1020,6 @@ with gr.Blocks(title="Parkinson's Disease Detection System", theme=gr.themes.Sof
             </div>
             """)
 
-            # Images first
             gr.Markdown("""
             <div style="background: linear-gradient(135deg, #f3e8ff 0%, #e9d5ff 100%); padding: 20px; border-radius: 10px; margin: 25px 0; box-shadow: 0 2px 6px rgba(0,0,0,0.08);">
                 <h3 style="color: #7c3aed; margin: 0 0 10px 0;">🖼️ Stage Visual References</h3>
@@ -1032,7 +1041,6 @@ with gr.Blocks(title="Parkinson's Disease Detection System", theme=gr.themes.Sof
                     container=True
                 )
 
-            # Stage output
             stage_output = gr.HTML(
                 value="""
                 <div style="text-align: center; padding: 60px 20px; background: linear-gradient(135deg, #e0f2fe 0%, #dbeafe 100%); border-radius: 15px; border: 2px dashed #3b82f6;">
@@ -1042,7 +1050,6 @@ with gr.Blocks(title="Parkinson's Disease Detection System", theme=gr.themes.Sof
                 """
             )
 
-            # Accordion
             with gr.Accordion("📊 Feature Contribution Analysis", open=False):
                 stage_features_output = gr.DataFrame(
                     label="Weighted Feature Contributions to Stage Prediction",
@@ -1062,18 +1069,14 @@ with gr.Blocks(title="Parkinson's Disease Detection System", theme=gr.themes.Sof
                 """)
 
     # Event Handlers
-
     def process_both_inputs(rec, upl, noise):
-        """Handle both record and upload inputs"""
         audio = rec if rec is not None else upl
         return detect_disease(audio, noise)
 
     def process_stage_both(rec, upl):
-        """Handle stage classification for both inputs"""
         audio = rec if rec is not None else upl
         return classify_stage(audio)
 
-    # Analyze button - updates both tabs
     analyze_btn.click(
         fn=process_both_inputs,
         inputs=[audio_record, audio_upload, noise_reduction],
@@ -1084,7 +1087,6 @@ with gr.Blocks(title="Parkinson's Disease Detection System", theme=gr.themes.Sof
         outputs=[stage_output, stage_features_output, stage_img1, stage_img2]
     )
 
-    # Clear button
     clear_btn.click(
         fn=clear_all,
         inputs=[],
@@ -1092,7 +1094,6 @@ with gr.Blocks(title="Parkinson's Disease Detection System", theme=gr.themes.Sof
                 stage_output, stage_features_output, stage_img1, stage_img2]
     )
 
-    # Auto-reset on audio input change
     def reset_outputs():
         return (
             """
@@ -1126,14 +1127,14 @@ with gr.Blocks(title="Parkinson's Disease Detection System", theme=gr.themes.Sof
     )
 
 # ============================================================================
-# LAUNCH INTERFACE
+# LAUNCH
 # ============================================================================
 
 if __name__ == "__main__":
     print("\n" + "="*80)
-    print("LAUNCHING PROFESSIONAL MEDICAL INTERFACE")
+    print("LAUNCHING PARKINSON'S DISEASE DETECTION SYSTEM")
     print("="*80)
-    print("\n🚀 Starting Parkinson's Disease Detection System...")
+    print("\n🚀 Starting application...")
     print("📊 Two-Tab Professional Interface")
     print("🎯 Tab 1: Disease Detection")
     print("📈 Tab 2: Stage Classification with Visual References")
@@ -1143,10 +1144,5 @@ if __name__ == "__main__":
         share=False,
         server_name="0.0.0.0",
         server_port=7860,
-        show_error=True,
-        debug=False,
-        quiet=False
+        show_error=True
     )
-
-    print("\n✅ Interface launched successfully!")
-    print("📱 Access at http://localhost:7860")
