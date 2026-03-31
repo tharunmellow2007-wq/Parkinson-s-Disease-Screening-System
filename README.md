@@ -197,7 +197,7 @@ For issues or questions:
 - Weighted voting classification methodology
 
 ## 🎨 Interface Features
-
+ 
 - **Modern Design**: Professional medical-grade interface
 - **Responsive Layout**: Works on desktop and mobile
 - **Color-Coded Results**: Easy-to-understand visual feedback
